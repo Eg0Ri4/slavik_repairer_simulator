@@ -21,7 +21,7 @@ func _ready() -> void:
 	# Freeze physics while held
 	freeze = true
 	collision_layer = 2
-	collision_mask = 6   # table + parts
+	collision_mask = 3   # table + parts (1 + 2 = 3)
 
 func _physics_process(_delta: float) -> void:
 	if is_held:
@@ -74,7 +74,7 @@ func place_at(world_pos: Vector3, pivot: Node3D) -> void:
 	# Restore physics but in frozen mode (joint will handle it)
 	freeze = true
 	collision_layer = 2
-	collision_mask = 6
+	collision_mask = 3   # table + parts (1 + 2 = 3)
 
 	GameState.register_assembly_part(self)
 

@@ -4,11 +4,14 @@
 extends Node3D
 
 # ── Inspector-configurable positions ────────────────────────────────────────
+@export var table_view_target: Node3D
+@export var under_table_view_target: Node3D
+
 @export var table_position: Vector3 = Vector3(0.0, 1.4, 1.2)
 @export var table_rotation_deg: Vector3 = Vector3(-45.0, 0.0, 0.0)
 
-@export var under_table_position: Vector3 = Vector3(0.0, -0.7, 1.2)
-@export var under_table_rotation_deg: Vector3 = Vector3(-20.0, 0.0, 0.0)
+@export var under_table_position: Vector3 = Vector3(0.448, -0.316, -1.389)
+@export var under_table_rotation_deg: Vector3 = Vector3(-7.0, -3.64, -41.9)
 
 @export var tween_duration: float = 0.8
 
@@ -79,11 +82,19 @@ func toggle_view() -> void:
 func _apply_state_instant(state: String) -> void:
 	GameState.set_camera_state(state)
 	if state == "TABLE_VIEW":
-		position = table_position
-		rotation_degrees = table_rotation_deg
+		if table_view_target:
+			global_position = table_view_target.global_position
+			global_rotation = table_view_target.global_rotation
+		else:
+			position = table_position
+			rotation_degrees = table_rotation_deg
 	else:
-		position = under_table_position
-		rotation_degrees = under_table_rotation_deg
+		if under_table_view_target:
+			global_position = under_table_view_target.global_position
+			global_rotation = under_table_view_target.global_rotation
+		else:
+			position = under_table_position
+			rotation_degrees = under_table_rotation_deg
 
 func _tween_to(new_state: String) -> void:
 	if _is_tweening:
@@ -93,18 +104,33 @@ func _tween_to(new_state: String) -> void:
 
 	var target_pos: Vector3
 	var target_rot: Vector3
+	var use_global = false
 
 	if new_state == "TABLE_VIEW":
-		target_pos = table_position
-		target_rot = table_rotation_deg
+		if table_view_target:
+			target_pos = table_view_target.global_position
+			target_rot = table_view_target.global_rotation_degrees
+			use_global = true
+		else:
+			target_pos = table_position
+			target_rot = table_rotation_deg
 	else:
-		target_pos = under_table_position
-		target_rot = under_table_rotation_deg
+		if under_table_view_target:
+			target_pos = under_table_view_target.global_position
+			target_rot = under_table_view_target.global_rotation_degrees
+			use_global = true
+		else:
+			target_pos = under_table_position
+			target_rot = under_table_rotation_deg
 
 	var tw: Tween = create_tween()
 	tw.set_parallel(true)
 	tw.set_ease(Tween.EASE_IN_OUT)
 	tw.set_trans(Tween.TRANS_CUBIC)
-	tw.tween_property(self, "position", target_pos, tween_duration)
-	tw.tween_property(self, "rotation_degrees", target_rot, tween_duration)
+	if use_global:
+		tw.tween_property(self, "global_position", target_pos, tween_duration)
+		tw.tween_property(self, "global_rotation_degrees", target_rot, tween_duration)
+	else:
+		tw.tween_property(self, "position", target_pos, tween_duration)
+		tw.tween_property(self, "rotation_degrees", target_rot, tween_duration)
 	tw.finished.connect(func() -> void: _is_tweening = false, CONNECT_ONE_SHOT)
