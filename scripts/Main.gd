@@ -42,6 +42,16 @@ func _ready() -> void:
 	table = get_node_or_null("GarageAndTable")
 	boxes = [$BoxA, $BoxB, $BoxC]
 
+	# Align AssemblyPivot Y position with the table top surface dynamically
+	var table_static = get_node_or_null("TableStaticBody")
+	if table_static:
+		var col_shape = table_static.get_node_or_null("CollisionShape3D")
+		if col_shape and col_shape.shape is BoxShape3D:
+			var shape_size = (col_shape.shape as BoxShape3D).size
+			var table_y = col_shape.global_position.y + (shape_size.y * 0.5 * col_shape.global_transform.basis.get_scale().y)
+			if assembly_pivot:
+				assembly_pivot.global_position.y = table_y
+
 	# Apply indicator material at runtime
 	var base: CSGCylinder3D = get_node_or_null("AssemblyPivot/PivotBase")
 	if base:
@@ -273,9 +283,17 @@ func _place_held_part(mouse_pos: Vector2) -> void:
 	var origin := cam.project_ray_origin(mouse_pos)
 	var direction := cam.project_ray_normal(mouse_pos)
 
-	# Default: place at table surface height
-	var table_y := 0.06   # table top surface
+	# Detect table top surface dynamically from TableStaticBody
+	var table_y := 0.06
+	var table_static = get_node_or_null("TableStaticBody")
+	if table_static:
+		var col_shape = table_static.get_node_or_null("CollisionShape3D")
+		if col_shape and col_shape.shape is BoxShape3D:
+			var shape_size = (col_shape.shape as BoxShape3D).size
+			table_y = col_shape.global_position.y + (shape_size.y * 0.5 * col_shape.global_transform.basis.get_scale().y)
+
 	var drop_pos := Vector3.ZERO
+	var hit_y := table_y
 
 	var space := get_world_3d().direct_space_state
 	var query := PhysicsRayQueryParameters3D.create(origin, origin + direction * 20.0)
@@ -284,15 +302,17 @@ func _place_held_part(mouse_pos: Vector2) -> void:
 
 	if result:
 		drop_pos = result.position
-		drop_pos.y = max(drop_pos.y, table_y)
+		hit_y = result.position.y
 	else:
 		# Fallback: intersect horizontal plane
 		if abs(direction.y) > 0.001:
 			var t := (table_y - origin.y) / direction.y
 			if t > 0:
 				drop_pos = origin + direction * t
+		hit_y = table_y
 
-	drop_pos.y = table_y + (part.item_data.size.y * 0.5 if part.item_data else 0.1)
+	# Place on top of the actual hit surface height
+	drop_pos.y = hit_y + (part.item_data.size.y * 0.5 if part.item_data else 0.1)
 
 	part.place_at(drop_pos, assembly_pivot)
 	_attach_part(part)
