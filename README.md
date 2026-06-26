@@ -62,9 +62,9 @@ Shape types: `"box"`, `"cylinder"`, `"sphere"`
 Create an `OrderData` resource in GDScript or via the editor. Set `requirements` array:
 ```gdscript
 {
-    "required_tag": "blade",
-    "target_position": Vector3(0, 0.3, 0),  # Local to AssemblyPivot
-    "points": 100
+	"required_tag": "blade",
+	"target_position": Vector3(0, 0.3, 0),  # Local to AssemblyPivot
+	"points": 100
 }
 ```
 

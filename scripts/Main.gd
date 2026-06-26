@@ -81,9 +81,14 @@ func _build_table() -> void:
 	if garage_scene:
 		table = garage_scene.instantiate()
 		table.name = "GarageAndTable"
+		var basis := Basis(
+			Vector3(0.94388556, 0, 0.33027276),
+			Vector3(0, 1, 0),
+			Vector3(-0.33027276, 0, 0.94388556)
+		)
 		table.transform = Transform3D(
-			Basis(),
-			Vector3(-159.69456, 114.06489, 85.18569)
+			basis,
+			Vector3(-0.53302, -0.19935045, -0.6058504)
 		)
 		add_child(table)
 	else:

@@ -4,10 +4,10 @@
 extends Node3D
 
 # ── Inspector-configurable positions ────────────────────────────────────────
-@export var table_position: Vector3 = Vector3(0.0, 2.8, 0.0)
-@export var table_rotation_deg: Vector3 = Vector3(-90.0, 0.0, 0.0)
+@export var table_position: Vector3 = Vector3(0.0, 1.8, 1.8)
+@export var table_rotation_deg: Vector3 = Vector3(-45.0, 0.0, 0.0)
 
-@export var under_table_position: Vector3 = Vector3(0.0, -1.2, 1.0)
+@export var under_table_position: Vector3 = Vector3(0.0, -0.7, 1.2)
 @export var under_table_rotation_deg: Vector3 = Vector3(-20.0, 0.0, 0.0)
 
 @export var tween_duration: float = 0.8
