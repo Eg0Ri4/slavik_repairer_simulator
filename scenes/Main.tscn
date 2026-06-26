@@ -31,8 +31,6 @@ transform = Transform3D(0.992546, 0.014889, -0.120967, 0, 0.992546, 0.121881, 0.
 [node name="CameraController" type="Node3D" parent="." unique_id=2093328528]
 transform = Transform3D(1, 0, 0, 0, 0.707107, 0.707107, 0, -0.707107, 0.707107, 0, 1.4, 1.2)
 script = ExtResource("2_camera")
-table_view_target = NodePath("../TableViewTarget")
-under_table_view_target = NodePath("../UnderTableViewTarget")
 
 [node name="Camera3D" type="Camera3D" parent="CameraController" unique_id=1648186827]
 transform = Transform3D(0.42822486, 0.63899267, -0.63899285, -0.63899255, 0.71411234, 0.28588742, 0.63899255, 0.2858876, 0.7141122, -0.60374665, -0.01958403, -0.996981)
@@ -47,13 +45,11 @@ transform = Transform3D(-0.14853762, 0, 0.47742704, 0, 0.5, 0, -0.47742704, 0, -
 collision_mask = 0
 
 [node name="CollisionShape3D" type="CollisionShape3D" parent="TableStaticBody" unique_id=2059977477]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.046827048, 0.2223661, -0.15051065)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.016872019, 0.006432295, -0.31606257)
 shape = SubResource("BoxShape3D_table")
 
 [node name="AssemblyPivot" type="Node3D" parent="." unique_id=1099143501]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.12, 0)
-
-
 
 [node name="BoxA" type="StaticBody3D" parent="." unique_id=633883063]
 transform = Transform3D(0.061334442, 0, -0.19036303, 0, 0.2, 0, 0.19036303, 0, 0.061334442, -0.33161613, -0.0108045265, 0.004536271)
