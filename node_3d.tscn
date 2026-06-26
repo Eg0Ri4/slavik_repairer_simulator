@@ -1,0 +1,8 @@
+[gd_scene format=3 uid="uid://cwqapy08l254y"]
+
+[ext_resource type="PackedScene" uid="uid://bcvlwatf4m577" path="res://a garage with a work station.glb" id="1_a202f"]
+
+[node name="Node3D" type="Node3D" unique_id=1277357973]
+
+[node name="a garage with a work station" parent="." unique_id=1536023582 instance=ExtResource("1_a202f")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -159.69456, 114.06489, 85.18569)
