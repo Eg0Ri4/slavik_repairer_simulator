@@ -36,11 +36,22 @@ var _order: OrderData
 
 # ── Lifecycle ────────────────────────────────────────────────────────────────
 func _ready() -> void:
-	_build_lighting()
-	_build_table()
-	_build_assembly_pivot()   # Must be before camera so group exists at CameraController._ready()
-	_build_boxes()
-	_build_camera()
+	# Reference existing nodes in the scene
+	camera_controller = $CameraController
+	assembly_pivot = $AssemblyPivot
+	table = get_node_or_null("GarageAndTable")
+	boxes = [$BoxA, $BoxB, $BoxC]
+
+	# Apply indicator material at runtime
+	var base: CSGCylinder3D = get_node_or_null("AssemblyPivot/PivotBase")
+	if base:
+		var base_mat := StandardMaterial3D.new()
+		base_mat.albedo_color = Color(0.7, 0.6, 0.1)
+		base_mat.emission_enabled = true
+		base_mat.emission = Color(0.6, 0.5, 0.05)
+		base_mat.emission_energy_multiplier = 0.3
+		base.material = base_mat
+
 	_build_systems()
 	_build_ui()
 	_setup_order()
@@ -49,121 +60,6 @@ func _ready() -> void:
 	GameState.camera_state_changed.connect(_on_camera_state_changed)
 	GameState.part_picked_up.connect(_on_part_picked_up)
 	GameState.part_placed.connect(_on_part_placed)
-
-# ── Scene construction ───────────────────────────────────────────────────────
-func _build_lighting() -> void:
-	var ambient := WorldEnvironment.new()
-	var env := Environment.new()
-	env.background_mode = Environment.BG_COLOR
-	env.background_color = Color(0.12, 0.10, 0.08)
-	env.ambient_light_color = Color(0.8, 0.75, 0.65)
-	env.ambient_light_energy = 0.6
-	ambient.environment = env
-	add_child(ambient)
-
-	var sun := DirectionalLight3D.new()
-	sun.rotation_degrees = Vector3(-55, 30, 0)
-	sun.light_color = Color(1.0, 0.95, 0.8)
-	sun.light_energy = 1.2
-	sun.shadow_enabled = true
-	add_child(sun)
-
-	var fill := OmniLight3D.new()
-	fill.position = Vector3(-1.0, 1.5, -0.5)
-	fill.light_color = Color(0.5, 0.6, 0.8)
-	fill.light_energy = 0.8
-	fill.omni_range = 5.0
-	add_child(fill)
-
-func _build_table() -> void:
-	# Load and instantiate the garage & workbench GLB model
-	var garage_scene := load("res://a garage with a work station.glb")
-	if garage_scene:
-		table = garage_scene.instantiate()
-		table.name = "GarageAndTable"
-		var basis := Basis(
-			Vector3(0.94388556, 0, 0.33027276),
-			Vector3(0, 1, 0),
-			Vector3(-0.33027276, 0, 0.94388556)
-		)
-		table.transform = Transform3D(
-			basis,
-			Vector3(-0.53302, -0.19935045, -0.6058504)
-		)
-		add_child(table)
-	else:
-		# Fallback: Table surface (the workbench top)
-		table = CSGBox3D.new()
-		table.name = "Table"
-		table.size = Vector3(2.0, 0.12, 1.5)
-		table.position = Vector3(0.0, 0.0, 0.0)
-		var table_mat := StandardMaterial3D.new()
-		table_mat.albedo_color = Color(0.45, 0.32, 0.20)
-		table_mat.roughness = 0.85
-		table.material = table_mat
-		add_child(table)
-
-	# Table static body for raycasting (so parts can land on it)
-	var table_static := StaticBody3D.new()
-	table_static.name = "TableStaticBody"
-	table_static.collision_layer = 1
-	table_static.collision_mask = 0
-	var ts_col := CollisionShape3D.new()
-	var ts_shape := BoxShape3D.new()
-	ts_shape.size = Vector3(2.0, 0.12, 1.5)
-	ts_col.shape = ts_shape
-	table_static.add_child(ts_col)
-	table_static.position = Vector3(0.0, 0.0, 0.0)
-	add_child(table_static)
-
-func _build_camera() -> void:
-	camera_controller = Node3D.new()
-	camera_controller.name = "CameraController"
-	camera_controller.set_script(load("res://scripts/CameraController.gd"))
-	add_child(camera_controller)
-
-	var cam := Camera3D.new()
-	cam.name = "Camera3D"
-	cam.fov = 60.0
-	cam.near = 0.05
-	cam.far = 100.0
-	camera_controller.add_child(cam)
-
-func _build_boxes() -> void:
-	# Position the boxes in a horizontal row neatly in front of the assembly station
-	var box_configs: Array[Dictionary] = [
-		{"pos": Vector3(-0.6, 0.235, 0.55), "color": Color(0.55, 0.32, 0.14), "label": "Box A"},
-		{"pos": Vector3(0.0,  0.235, 0.55), "color": Color(0.20, 0.45, 0.25), "label": "Box B"},
-		{"pos": Vector3(0.6,  0.235, 0.55), "color": Color(0.30, 0.30, 0.55), "label": "Box C"},
-	]
-
-	for cfg in box_configs:
-		var box := JunkBox.new()
-		box.position = cfg["pos"]
-		box.box_color = cfg["color"]
-		box.box_label = cfg["label"]
-		add_child(box)
-		boxes.append(box)
-
-func _build_assembly_pivot() -> void:
-	assembly_pivot = Node3D.new()
-	assembly_pivot.name = "AssemblyPivot"
-	assembly_pivot.position = Vector3(0.0, 0.12, 0.0)
-	assembly_pivot.add_to_group("assembly_pivot")
-	add_child(assembly_pivot)
-
-	# A small base indicator on the table
-	var base := CSGCylinder3D.new()
-	base.name = "PivotBase"
-	base.radius = 0.22
-	base.height = 0.015
-	var base_mat := StandardMaterial3D.new()
-	base_mat.albedo_color = Color(0.7, 0.6, 0.1)
-	base_mat.emission_enabled = true
-	base_mat.emission = Color(0.6, 0.5, 0.05)
-	base_mat.emission_energy_multiplier = 0.3
-	base.material = base_mat
-	assembly_pivot.add_child(base)
 
 func _build_systems() -> void:
 	attachment_system = AttachmentSystem.new()

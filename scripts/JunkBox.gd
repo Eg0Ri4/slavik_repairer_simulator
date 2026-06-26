@@ -1,3 +1,4 @@
+@tool
 ## JunkBox.gd
 ## A clickable box under the table that spawns random junk parts.
 class_name JunkBox
@@ -19,8 +20,14 @@ func _ready() -> void:
 	collision_layer = 4
 	collision_mask = 0
 
+	# Clean up previous editor generated nodes to avoid duplicates
+	for child in get_children():
+		if child.name in ["BoxMeshInstance", "BoxLabel3D", "BoxCollisionShape"]:
+			child.queue_free()
+
 	# Build visual box
 	_mesh_inst = MeshInstance3D.new()
+	_mesh_inst.name = "BoxMeshInstance"
 	var box_mesh := BoxMesh.new()
 	box_mesh.size = Vector3(0.4, 0.35, 0.35)
 	_mesh_inst.mesh = box_mesh
@@ -41,6 +48,7 @@ func _ready() -> void:
 
 	# Label above box
 	var label3d := Label3D.new()
+	label3d.name = "BoxLabel3D"
 	label3d.text = box_label
 	label3d.font_size = 18
 	label3d.position = Vector3(0, 0.25, 0)
@@ -49,12 +57,14 @@ func _ready() -> void:
 
 	# Collision shape
 	var col := CollisionShape3D.new()
+	col.name = "BoxCollisionShape"
 	var shape := BoxShape3D.new()
 	shape.size = Vector3(0.4, 0.35, 0.35)
 	col.shape = shape
 	add_child(col)
 
-	_populate_pool()
+	if not Engine.is_editor_hint():
+		_populate_pool()
 
 func _populate_pool() -> void:
 	# Create several predefined ItemData resources at runtime

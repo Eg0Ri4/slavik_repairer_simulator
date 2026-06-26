@@ -1,6 +1,78 @@
-[gd_scene format=3 uid="uid://trust_me_main_scene"]
+[gd_scene load_steps=7 format=3 uid="uid://trust_me_main_scene"]
 
 [ext_resource type="Script" path="res://scripts/Main.gd" id="1_main"]
+[ext_resource type="Script" path="res://scripts/CameraController.gd" id="2_camera"]
+[ext_resource type="PackedScene" uid="uid://ce2b1ad4ebe1k" path="res://a garage with a work station.glb" id="3_garage"]
+[ext_resource type="Script" path="res://scripts/JunkBox.gd" id="4_box"]
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_table"]
+size = Vector3(2, 0.12, 1.5)
 
 [node name="Main" type="Node3D"]
 script = ExtResource("1_main")
+
+[node name="DirectionalLight3D" type="DirectionalLight3D" parent="."]
+transform = Transform3D(0.573576, -0.696364, 0.43128, 0, 0.525322, 0.850903, -0.819152, -0.488057, 0.301314, 0, 0, 0)
+light_color = Color(1, 0.95, 0.8, 1)
+light_energy = 1.2
+shadow_enabled = true
+
+[node name="OmniLight3D" type="OmniLight3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1, 1.5, -0.5)
+light_color = Color(0.5, 0.6, 0.8, 1)
+light_energy = 0.8
+omni_range = 5.0
+
+[node name="CameraController" type="Node3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 0.707107, 0.707107, 0, -0.707107, 0.707107, 0, 1.4, 1.2)
+script = ExtResource("2_camera")
+table_position = Vector3(0, 1.4, 1.2)
+table_rotation_deg = Vector3(-45, 0, 0)
+under_table_position = Vector3(0, -0.7, 1.2)
+under_table_rotation_deg = Vector3(-20, 0, 0)
+
+[node name="Camera3D" type="Camera3D" parent="CameraController"]
+fov = 60.0
+near = 0.05
+far = 100.0
+
+[node name="GarageAndTable" parent="." instance=ExtResource("3_garage")]
+transform = Transform3D(0.943886, 0, 0.330273, 0, 1, 0, -0.330273, 0, 0.943886, -0.53302, -0.19935, -0.60585)
+
+[node name="TableStaticBody" type="StaticBody3D" parent="."]
+collision_mask = 0
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="TableStaticBody"]
+shape = SubResource("BoxShape3D_table")
+
+[node name="AssemblyPivot" type="Node3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.12, 0)
+groups=["assembly_pivot"]
+
+[node name="PivotBase" type="CSGCylinder3D" parent="AssemblyPivot"]
+radius = 0.22
+height = 0.015
+
+[node name="BoxA" type="StaticBody3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.6, 0.235, 0.55)
+collision_layer = 4
+collision_mask = 0
+script = ExtResource("4_box")
+box_color = Color(0.55, 0.32, 0.14, 1)
+box_label = "Box A"
+
+[node name="BoxB" type="StaticBody3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.235, 0.55)
+collision_layer = 4
+collision_mask = 0
+script = ExtResource("4_box")
+box_color = Color(0.2, 0.45, 0.25, 1)
+box_label = "Box B"
+
+[node name="BoxC" type="StaticBody3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.6, 0.235, 0.55)
+collision_layer = 4
+collision_mask = 0
+script = ExtResource("4_box")
+box_color = Color(0.3, 0.3, 0.55, 1)
+box_label = "Box C"
