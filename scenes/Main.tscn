@@ -22,21 +22,21 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.1336203, 0.1325419, 0.8585
 light_color = Color(0.5, 0.6, 0.8, 1)
 light_energy = 0.8
 
-[node name="TableViewTarget" type="Node3D" parent="."]
+[node name="TableViewTarget" type="Node3D" parent="." unique_id=939745630]
 transform = Transform3D(1, 0, 0, 0, 0.707107, 0.707107, 0, -0.707107, 0.707107, 0, 1.4, 1.2)
 
-[node name="UnderTableViewTarget" type="Node3D" parent="."]
+[node name="UnderTableViewTarget" type="Node3D" parent="." unique_id=703505990]
 transform = Transform3D(0.992546, 0.014889, -0.120967, 0, 0.992546, 0.121881, 0.121881, -0.120967, 0.985148, 0.448, -0.316, -1.389)
 
-[node name="CameraController" type="Node3D" parent="."]
+[node name="CameraController" type="Node3D" parent="." unique_id=2093328528]
 transform = Transform3D(1, 0, 0, 0, 0.707107, 0.707107, 0, -0.707107, 0.707107, 0, 1.4, 1.2)
 script = ExtResource("2_camera")
 table_view_target = NodePath("../TableViewTarget")
 under_table_view_target = NodePath("../UnderTableViewTarget")
 
-[node name="Camera3D" type="Camera3D" parent="CameraController"]
+[node name="Camera3D" type="Camera3D" parent="CameraController" unique_id=1648186827]
+transform = Transform3D(0.42822486, 0.63899267, -0.63899285, -0.63899255, 0.71411234, 0.28588742, 0.63899255, 0.2858876, 0.7141122, -0.60374665, -0.01958403, -0.996981)
 fov = 60.0
-near = 0.05
 far = 100.0
 
 [node name="GarageAndTable" parent="." unique_id=1303326482 instance=ExtResource("3_garage")]
@@ -53,9 +53,7 @@ shape = SubResource("BoxShape3D_table")
 [node name="AssemblyPivot" type="Node3D" parent="." unique_id=1099143501]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.12, 0)
 
-[node name="PivotBase" type="CSGCylinder3D" parent="AssemblyPivot" unique_id=806799231]
-radius = 0.22
-height = 0.015
+
 
 [node name="BoxA" type="StaticBody3D" parent="." unique_id=633883063]
 transform = Transform3D(0.061334442, 0, -0.19036303, 0, 0.2, 0, 0.19036303, 0, 0.061334442, -0.33161613, -0.0108045265, 0.004536271)

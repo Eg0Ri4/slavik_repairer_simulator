@@ -87,18 +87,45 @@ func _follow_mouse() -> void:
 	if camera == null:
 		return
 
+	# Calculate current table surface height dynamically
+	var follow_y := _follow_plane_y
+	var main_node = get_tree().root.get_node_or_null("Main")
+	if main_node:
+		var table_static = main_node.get_node_or_null("TableStaticBody")
+		if table_static:
+			var col_shape = table_static.get_node_or_null("CollisionShape3D")
+			if col_shape and col_shape.shape is BoxShape3D:
+				var shape_size = (col_shape.shape as BoxShape3D).size
+				follow_y = col_shape.global_position.y + (shape_size.y * 0.5 * col_shape.global_transform.basis.get_scale().y)
+
 	var mouse_pos: Vector2 = viewport.get_mouse_position()
-	# Project mouse onto the horizontal plane at _follow_plane_y
+
+	# Project using target table view camera transform if it exists, so the dragging
+	# feels immediately and already on the table, without sliding around during transition.
+	var saved_transform := camera.global_transform
+	var using_target := false
+	if main_node:
+		var tv_target = main_node.get_node_or_null("TableViewTarget")
+		if tv_target:
+			# Target Camera3D transform is tv_target.global_transform * camera.transform
+			var target_camera_global = tv_target.global_transform * camera.transform
+			camera.global_transform = target_camera_global
+			using_target = true
+
+	# Project mouse onto the horizontal plane at follow_y
 	var origin: Vector3 = camera.project_ray_origin(mouse_pos)
 	var direction: Vector3 = camera.project_ray_normal(mouse_pos)
+
+	if using_target:
+		camera.global_transform = saved_transform
 
 	if abs(direction.y) < 0.001:
 		return
 
-	var t: float = (_follow_plane_y - origin.y) / direction.y
+	var t: float = (follow_y - origin.y) / direction.y
 	var target: Vector3 = origin + direction * t
 	# Small hover above surface
-	target.y = _follow_plane_y + 0.05
+	target.y = follow_y + 0.05
 	global_position = target
 
 # ── Mesh builder (CSG-like using MeshInstance3D) ─────────────────────────────

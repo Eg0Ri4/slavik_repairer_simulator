@@ -36,7 +36,7 @@ func _ready() -> void:
 		return
 
 	# Find AssemblyPivot in the scene tree
-	_assembly_pivot = get_tree().get_first_node_in_group("assembly_pivot")
+	_assembly_pivot = get_node_or_null("../AssemblyPivot")
 
 	# Start at TABLE_VIEW
 	_apply_state_instant("TABLE_VIEW")

@@ -34,6 +34,8 @@ var _drop_preview: Node3D = null
 # Active order
 var _order: OrderData
 
+var _table_y: float = 0.3
+
 # ── Lifecycle ────────────────────────────────────────────────────────────────
 func _ready() -> void:
 	# Reference existing nodes in the scene
@@ -48,19 +50,11 @@ func _ready() -> void:
 		var col_shape = table_static.get_node_or_null("CollisionShape3D")
 		if col_shape and col_shape.shape is BoxShape3D:
 			var shape_size = (col_shape.shape as BoxShape3D).size
-			var table_y = col_shape.global_position.y + (shape_size.y * 0.5 * col_shape.global_transform.basis.get_scale().y)
+			_table_y = col_shape.global_position.y + (shape_size.y * 0.5 * col_shape.global_transform.basis.get_scale().y)
 			if assembly_pivot:
-				assembly_pivot.global_position.y = table_y
+				assembly_pivot.global_position.y = _table_y
 
-	# Apply indicator material at runtime
-	var base: CSGCylinder3D = get_node_or_null("AssemblyPivot/PivotBase")
-	if base:
-		var base_mat := StandardMaterial3D.new()
-		base_mat.albedo_color = Color(0.7, 0.6, 0.1)
-		base_mat.emission_enabled = true
-		base_mat.emission = Color(0.6, 0.5, 0.05)
-		base_mat.emission_energy_multiplier = 0.3
-		base.material = base_mat
+
 
 	_build_systems()
 	_build_ui()
@@ -257,11 +251,13 @@ func _extract_from_box(box: JunkBox) -> void:
 	if item_data == null:
 		return
 
-	# Spawn part above the box temporarily
+	# Spawn part on the table surface directly above the box
 	var part := JunkPart.new()
 	part.setup(item_data)
 	add_child(part)
-	part.global_position = box.global_position + Vector3(0, 0.3, 0)
+	var spawn_pos := box.global_position
+	spawn_pos.y = _table_y + 0.05
+	part.global_position = spawn_pos
 	part.pick_up()
 	GameState.pick_up_part(part)
 
@@ -280,18 +276,22 @@ func _place_held_part(mouse_pos: Vector2) -> void:
 	if cam == null:
 		return
 
+	# If camera is transitioning, project using target table view camera transform for consistency
+	var saved_transform := cam.global_transform
+	var using_target := false
+	var tv_target = get_node_or_null("TableViewTarget")
+	if tv_target:
+		var target_camera_global = tv_target.global_transform * cam.transform
+		cam.global_transform = target_camera_global
+		using_target = true
+
 	var origin := cam.project_ray_origin(mouse_pos)
 	var direction := cam.project_ray_normal(mouse_pos)
 
-	# Detect table top surface dynamically from TableStaticBody
-	var table_y := 0.06
-	var table_static = get_node_or_null("TableStaticBody")
-	if table_static:
-		var col_shape = table_static.get_node_or_null("CollisionShape3D")
-		if col_shape and col_shape.shape is BoxShape3D:
-			var shape_size = (col_shape.shape as BoxShape3D).size
-			table_y = col_shape.global_position.y + (shape_size.y * 0.5 * col_shape.global_transform.basis.get_scale().y)
+	if using_target:
+		cam.global_transform = saved_transform
 
+	var table_y := _table_y
 	var drop_pos := Vector3.ZERO
 	var hit_y := table_y
 
