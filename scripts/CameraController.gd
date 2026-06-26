@@ -4,7 +4,7 @@
 extends Node3D
 
 # ── Inspector-configurable positions ────────────────────────────────────────
-@export var table_position: Vector3 = Vector3(0.0, 1.8, 1.8)
+@export var table_position: Vector3 = Vector3(0.0, 1.4, 1.2)
 @export var table_rotation_deg: Vector3 = Vector3(-45.0, 0.0, 0.0)
 
 @export var under_table_position: Vector3 = Vector3(0.0, -0.7, 1.2)

@@ -130,10 +130,11 @@ func _build_camera() -> void:
 	camera_controller.add_child(cam)
 
 func _build_boxes() -> void:
+	# Position the boxes in a horizontal row neatly in front of the assembly station
 	var box_configs: Array[Dictionary] = [
-		{"pos": Vector3(-0.55, -1.0, 0.0), "color": Color(0.55, 0.32, 0.14), "label": "Box A"},
-		{"pos": Vector3(0.0,   -1.0, 0.0), "color": Color(0.20, 0.45, 0.25), "label": "Box B"},
-		{"pos": Vector3(0.55,  -1.0, 0.0), "color": Color(0.30, 0.30, 0.55), "label": "Box C"},
+		{"pos": Vector3(-0.6, 0.235, 0.55), "color": Color(0.55, 0.32, 0.14), "label": "Box A"},
+		{"pos": Vector3(0.0,  0.235, 0.55), "color": Color(0.20, 0.45, 0.25), "label": "Box B"},
+		{"pos": Vector3(0.6,  0.235, 0.55), "color": Color(0.30, 0.30, 0.55), "label": "Box C"},
 	]
 
 	for cfg in box_configs:
@@ -178,25 +179,30 @@ func _build_ui() -> void:
 	ui_layer.name = "UI"
 	add_child(ui_layer)
 
-	var panel := _make_panel(Vector2(10, 10), Vector2(320, 200))
+	# ── Order Panel (using VBoxContainer to prevent overlap) ─────────────────
+	var panel := _make_panel(Vector2(10, 10), Vector2(320, 215))
 	ui_layer.add_child(panel)
+
+	var vbox := VBoxContainer.new()
+	vbox.name = "OrderVBox"
+	vbox.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	vbox.add_theme_constant_override("separation", 6)
+	panel.add_child(vbox)
 
 	# Order title
 	var order_title := Label.new()
 	order_title.name = "OrderTitle"
 	order_title.text = "📋 REPAIR ORDER"
 	order_title.add_theme_font_size_override("font_size", 16)
-	order_title.position = Vector2(12, 8)
-	panel.add_child(order_title)
+	vbox.add_child(order_title)
 
 	order_desc_label = Label.new()
 	order_desc_label.name = "OrderDesc"
 	order_desc_label.text = "Loading order..."
 	order_desc_label.add_theme_font_size_override("font_size", 13)
-	order_desc_label.position = Vector2(12, 30)
 	order_desc_label.custom_minimum_size = Vector2(295, 60)
 	order_desc_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	panel.add_child(order_desc_label)
+	vbox.add_child(order_desc_label)
 
 	# Held part indicator
 	part_name_label = Label.new()
@@ -204,66 +210,77 @@ func _build_ui() -> void:
 	part_name_label.text = "Holding: nothing"
 	part_name_label.add_theme_color_override("font_color", Color(0.9, 0.8, 0.3))
 	part_name_label.add_theme_font_size_override("font_size", 14)
-	part_name_label.position = Vector2(12, 95)
-	panel.add_child(part_name_label)
+	vbox.add_child(part_name_label)
 
 	# Instructions
 	instructions_label = Label.new()
 	instructions_label.name = "Instructions"
-	instructions_label.text = "RMB drag: rotate assembly\nTab/button: go under table\nClick box: grab part\nLMB: place part"
+	instructions_label.text = "RMB drag: rotate assembly\nClick box: grab part\nLMB: place part"
 	instructions_label.add_theme_color_override("font_color", Color(0.75, 0.75, 0.75))
 	instructions_label.add_theme_font_size_override("font_size", 11)
-	instructions_label.position = Vector2(12, 118)
-	panel.add_child(instructions_label)
+	vbox.add_child(instructions_label)
 
-	# ── Tool selector ────────────────────────────────────────────────────────
-	var tool_panel := _make_panel(Vector2(10, 225), Vector2(320, 75))
+	# ── Tool selector (using VBox & HBox layout) ─────────────────────────────
+	var tool_panel := _make_panel(Vector2(10, 235), Vector2(320, 85))
 	ui_layer.add_child(tool_panel)
+
+	var tool_vbox := VBoxContainer.new()
+	tool_vbox.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	tool_vbox.add_theme_constant_override("separation", 6)
+	tool_panel.add_child(tool_vbox)
 
 	var tool_title := Label.new()
 	tool_title.text = "🔧 ATTACHMENT TOOL"
 	tool_title.add_theme_font_size_override("font_size", 14)
-	tool_title.position = Vector2(12, 8)
-	tool_panel.add_child(tool_title)
+	tool_vbox.add_child(tool_title)
 
-	tool_bolts_btn = _make_button("🔩 BOLTS (Rigid)", Vector2(10, 30), Vector2(140, 32))
+	var tool_hbox := HBoxContainer.new()
+	tool_hbox.add_theme_constant_override("separation", 8)
+	tool_vbox.add_child(tool_hbox)
+
+	tool_bolts_btn = _make_button("🔩 BOLTS (Rigid)", Vector2.ZERO, Vector2(140, 32))
+	tool_bolts_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	tool_bolts_btn.pressed.connect(_on_bolts_pressed)
-	tool_panel.add_child(tool_bolts_btn)
+	tool_hbox.add_child(tool_bolts_btn)
 
-	tool_tape_btn = _make_button("📎 TAPE (Wobbly)", Vector2(158, 30), Vector2(140, 32))
+	tool_tape_btn = _make_button("📎 TAPE (Wobbly)", Vector2.ZERO, Vector2(140, 32))
+	tool_tape_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	tool_tape_btn.pressed.connect(_on_tape_pressed)
-	tool_panel.add_child(tool_tape_btn)
+	tool_hbox.add_child(tool_tape_btn)
 
 	_update_tool_buttons()
 
 	# ── View toggle ──────────────────────────────────────────────────────────
-	view_toggle_btn = _make_button("🔽 LOOK UNDER TABLE (Tab)", Vector2(10, 315), Vector2(320, 40))
+	view_toggle_btn = _make_button("🔽 LOOK UNDER TABLE (Tab)", Vector2(10, 330), Vector2(320, 40))
 	view_toggle_btn.pressed.connect(_on_view_toggle_pressed)
 	ui_layer.add_child(view_toggle_btn)
 
 	# ── TRUST ME button ──────────────────────────────────────────────────────
-	trust_me_btn = _make_button("⚡ TRUST ME, I'M AN ENGINEER ⚡", Vector2(10, 370), Vector2(320, 50))
+	trust_me_btn = _make_button("⚡ TRUST ME, I'M AN ENGINEER ⚡", Vector2(10, 380), Vector2(320, 50))
 	trust_me_btn.add_theme_font_size_override("font_size", 15)
 	trust_me_btn.add_theme_color_override("font_color", Color(1, 1, 0))
 	trust_me_btn.pressed.connect(_on_trust_me_pressed)
 	ui_layer.add_child(trust_me_btn)
 
-	# ── Result display ───────────────────────────────────────────────────────
-	var result_panel := _make_panel(Vector2(10, 432), Vector2(320, 120))
+	# ── Result display (using vertical layout) ───────────────────────────────
+	var result_panel := _make_panel(Vector2(10, 440), Vector2(320, 135))
 	result_panel.name = "ResultPanel"
 	ui_layer.add_child(result_panel)
+
+	var result_vbox := VBoxContainer.new()
+	result_vbox.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	result_panel.add_child(result_vbox)
 
 	result_label = Label.new()
 	result_label.name = "ResultLabel"
 	result_label.text = "Press 'TRUST ME' to evaluate your repair!"
 	result_label.add_theme_font_size_override("font_size", 13)
-	result_label.position = Vector2(10, 10)
-	result_label.custom_minimum_size = Vector2(300, 100)
+	result_label.custom_minimum_size = Vector2(300, 110)
 	result_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	result_panel.add_child(result_label)
+	result_vbox.add_child(result_label)
 
 	# ── Reset button ─────────────────────────────────────────────────────────
-	var reset_btn := _make_button("🗑 CLEAR ASSEMBLY", Vector2(10, 565), Vector2(320, 36))
+	var reset_btn := _make_button("🗑 CLEAR ASSEMBLY", Vector2(10, 585), Vector2(320, 36))
 	reset_btn.pressed.connect(_on_reset_pressed)
 	ui_layer.add_child(reset_btn)
 
@@ -306,6 +323,11 @@ func _handle_left_click(mouse_pos: Vector2) -> void:
 			# If holding a part, place it
 			if GameState.held_part != null:
 				_place_held_part(mouse_pos)
+			else:
+				# Try to click a box to grab a part directly
+				var box := _raycast_for_box(mouse_pos)
+				if box:
+					_extract_from_box(box)
 
 func _raycast_for_box(mouse_pos: Vector2) -> JunkBox:
 	var cam := get_viewport().get_camera_3d()
