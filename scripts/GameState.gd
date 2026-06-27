@@ -1,7 +1,7 @@
 ## GameState - Autoload singleton for global game state
 extends Node
 
-## Current tool: "bolts" or "tape"
+## Current tool: "bolts", "tape", or "nail"
 var active_tool: String = "bolts"
 
 ## The part currently being held/dragged
@@ -21,6 +21,7 @@ signal tool_changed(new_tool: String)
 signal part_picked_up(part: RigidBody3D)
 signal part_placed()
 signal camera_state_changed(new_state: String)
+signal nail_event(event_name: String, data: Variant)
 
 func set_active_tool(tool_name: String) -> void:
 	active_tool = tool_name

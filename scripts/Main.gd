@@ -9,6 +9,7 @@ var assembly_pivot: Node3D
 var table: Node3D
 var attachment_system: AttachmentSystem
 var evaluation_system: EvaluationSystem
+var nail_tool: NailTool
 
 # Under-table boxes
 var boxes: Array[JunkBox] = []
@@ -17,6 +18,7 @@ var boxes: Array[JunkBox] = []
 var ui_layer: CanvasLayer
 var tool_tape_btn: Button
 var tool_bolts_btn: Button
+var tool_nail_btn: Button
 var trust_me_btn: Button
 var result_label: Label
 var held_label: Label
@@ -24,6 +26,7 @@ var view_toggle_btn: Button
 var order_desc_label: Label
 var part_name_label: Label
 var instructions_label: Label
+var nail_status_label: Label
 
 # Hover highlight state
 var _hovered_box: JunkBox = null
@@ -74,6 +77,17 @@ func _build_systems() -> void:
 	evaluation_system.name = "EvaluationSystem"
 	add_child(evaluation_system)
 
+	# Nail tool
+	nail_tool = NailTool.new()
+	nail_tool.name = "NailTool"
+	nail_tool.assembly_pivot = assembly_pivot
+	add_child(nail_tool)
+
+	# Connect nail tool signals for UI feedback
+	nail_tool.nail_placed.connect(_on_nail_placed)
+	nail_tool.nail_strike_performed.connect(_on_nail_strike)
+	nail_tool.nail_fully_driven.connect(_on_nail_driven)
+
 func _build_ui() -> void:
 	ui_layer = CanvasLayer.new()
 	ui_layer.name = "UI"
@@ -115,13 +129,13 @@ func _build_ui() -> void:
 	# Instructions
 	instructions_label = Label.new()
 	instructions_label.name = "Instructions"
-	instructions_label.text = "RMB drag: rotate assembly\nClick box: grab part\nLMB: place part"
+	instructions_label.text = "RMB drag: rotate assembly\nClick box: grab part\nLMB: place part\nQ/E R/F T/G: rotate held part\nShift+drag: free rotate held part"
 	instructions_label.add_theme_color_override("font_color", Color(0.75, 0.75, 0.75))
 	instructions_label.add_theme_font_size_override("font_size", 11)
 	vbox.add_child(instructions_label)
 
 	# ── Tool selector (using VBox & HBox layout) ─────────────────────────────
-	var tool_panel := _make_panel(Vector2(10, 235), Vector2(320, 85))
+	var tool_panel := _make_panel(Vector2(10, 235), Vector2(320, 115))
 	ui_layer.add_child(tool_panel)
 
 	var tool_vbox := VBoxContainer.new()
@@ -147,6 +161,19 @@ func _build_ui() -> void:
 	tool_tape_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	tool_tape_btn.pressed.connect(_on_tape_pressed)
 	tool_hbox.add_child(tool_tape_btn)
+
+	tool_nail_btn = _make_button("🔨 NAIL", Vector2.ZERO, Vector2(100, 32))
+	tool_nail_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	tool_nail_btn.pressed.connect(_on_nail_pressed)
+	tool_hbox.add_child(tool_nail_btn)
+
+	# Nail status label (shows hammering progress)
+	nail_status_label = Label.new()
+	nail_status_label.name = "NailStatus"
+	nail_status_label.text = ""
+	nail_status_label.add_theme_color_override("font_color", Color(0.8, 0.6, 0.3))
+	nail_status_label.add_theme_font_size_override("font_size", 12)
+	tool_vbox.add_child(nail_status_label)
 
 	_update_tool_buttons()
 
@@ -224,6 +251,9 @@ func _handle_left_click(mouse_pos: Vector2) -> void:
 			if GameState.held_part != null:
 				_place_held_part(mouse_pos)
 			else:
+				# Check nail tool first
+				if GameState.active_tool == "nail" and nail_tool.handle_click(mouse_pos):
+					return
 				# Try to click a box to grab a part directly
 				var box := _raycast_for_box(mouse_pos)
 				if box:
@@ -297,7 +327,7 @@ func _place_held_part(mouse_pos: Vector2) -> void:
 
 	var space := get_world_3d().direct_space_state
 	var query := PhysicsRayQueryParameters3D.create(origin, origin + direction * 20.0)
-	query.collision_mask = 1   # table layer
+	query.collision_mask = 3   # table layer (1) + placed parts layer (2)
 	var result := space.intersect_ray(query)
 
 	if result:
@@ -364,12 +394,26 @@ func _on_tape_pressed() -> void:
 	GameState.set_active_tool("tape")
 	_update_tool_buttons()
 
+func _on_nail_pressed() -> void:
+	GameState.set_active_tool("nail")
+	_update_tool_buttons()
+
 func _update_tool_buttons() -> void:
-	if tool_bolts_btn == null or tool_tape_btn == null:
+	if tool_bolts_btn == null or tool_tape_btn == null or tool_nail_btn == null:
 		return
 	var active := GameState.active_tool
-	tool_bolts_btn.modulate = Color(1.0, 0.9, 0.3) if active == "bolts" else Color(0.75, 0.75, 0.75)
-	tool_tape_btn.modulate  = Color(1.0, 0.9, 0.3) if active == "tape"  else Color(0.75, 0.75, 0.75)
+	var active_color := Color(1.0, 0.9, 0.3)
+	var inactive_color := Color(0.75, 0.75, 0.75)
+	tool_bolts_btn.modulate = active_color if active == "bolts" else inactive_color
+	tool_tape_btn.modulate  = active_color if active == "tape"  else inactive_color
+	tool_nail_btn.modulate  = active_color if active == "nail"  else inactive_color
+
+	# Update nail status label
+	if nail_status_label:
+		if active == "nail":
+			nail_status_label.text = "Click on a part to place nail, then click nail to hammer"
+		else:
+			nail_status_label.text = ""
 
 func _on_trust_me_pressed() -> void:
 	if _order == null:
@@ -413,7 +457,7 @@ func _on_trust_me_pressed() -> void:
 func _on_reset_pressed() -> void:
 	# Remove all placed parts and joints from assembly pivot
 	for child in assembly_pivot.get_children():
-		if child is JunkPart or child is Joint3D:
+		if child is JunkPart or child is Joint3D or child is Nail:
 			child.queue_free()
 
 	# Also remove any held part
@@ -428,6 +472,23 @@ func _on_reset_pressed() -> void:
 
 	if part_name_label:
 		part_name_label.text = "Holding: nothing"
+
+# ── Nail tool signal handlers ─────────────────────────────────────────────────
+func _on_nail_placed(nail: Nail) -> void:
+	if nail_status_label:
+		nail_status_label.text = "🔨 Nail placed! Click it to hammer in (%d%%)" % int(nail.get_progress() * 100)
+
+func _on_nail_strike(progress: float) -> void:
+	if nail_status_label:
+		var pct := int(progress * 100)
+		if pct >= 100:
+			nail_status_label.text = "✅ Nail fully driven! Objects fastened."
+		else:
+			nail_status_label.text = "🔨 Hammering... %d%%" % pct
+
+func _on_nail_driven(nail: Nail) -> void:
+	if nail_status_label:
+		nail_status_label.text = "✅ Nail fastened! Place another or switch tools."
 
 # ── GameState signal handlers ─────────────────────────────────────────────────
 func _on_camera_state_changed(new_state: String) -> void:

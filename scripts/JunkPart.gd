@@ -16,6 +16,17 @@ var _mesh_node: Node3D = null
 # ── Placement state ──────────────────────────────────────────────────────────
 var _follow_plane_y: float = 0.07   # height of table surface in world space
 
+# ── Rotation state ───────────────────────────────────────────────────────────
+## Accumulated rotation offset applied by the player (in degrees).
+var _rotation_offset := Vector3.ZERO
+## Rotation step for keyboard inputs (degrees).
+const ROTATION_STEP_DEG: float = 15.0
+## Mouse rotation sensitivity (degrees per pixel of mouse movement).
+const MOUSE_ROT_SENSITIVITY: float = 0.4
+## Whether the Shift key is currently held (for mouse rotation mode).
+var _shift_held: bool = false
+var _last_mouse_pos: Vector2 = Vector2.ZERO
+
 # ── Lifecycle ────────────────────────────────────────────────────────────────
 func _ready() -> void:
 	# Freeze physics while held
@@ -25,7 +36,53 @@ func _ready() -> void:
 
 func _physics_process(_delta: float) -> void:
 	if is_held:
+		_handle_keyboard_rotation()
 		_follow_mouse()
+
+func _unhandled_input(event: InputEvent) -> void:
+	if not is_held:
+		return
+
+	# Track Shift state for mouse rotation mode
+	if event is InputEventKey:
+		if event.keycode == KEY_SHIFT:
+			if event.pressed and not event.is_echo():
+				_shift_held = true
+				_last_mouse_pos = get_viewport().get_mouse_position()
+			elif not event.pressed:
+				_shift_held = false
+
+	# Shift + mouse drag → free rotation on Y (horizontal) and X (vertical)
+	if event is InputEventMouseMotion and _shift_held:
+		var motion := event as InputEventMouseMotion
+		_rotation_offset.y += motion.relative.x * MOUSE_ROT_SENSITIVITY
+		_rotation_offset.x += motion.relative.y * MOUSE_ROT_SENSITIVITY
+		get_viewport().set_input_as_handled()
+
+func _handle_keyboard_rotation() -> void:
+	# Q/E → local Y axis (yaw)
+	if Input.is_key_pressed(KEY_Q) and _is_key_just(KEY_Q):
+		_rotation_offset.y -= ROTATION_STEP_DEG
+	if Input.is_key_pressed(KEY_E) and _is_key_just(KEY_E):
+		_rotation_offset.y += ROTATION_STEP_DEG
+	# R/F → local X axis (pitch)
+	if Input.is_key_pressed(KEY_R) and _is_key_just(KEY_R):
+		_rotation_offset.x -= ROTATION_STEP_DEG
+	if Input.is_key_pressed(KEY_F) and _is_key_just(KEY_F):
+		_rotation_offset.x += ROTATION_STEP_DEG
+	# T/G → local Z axis (roll)
+	if Input.is_key_pressed(KEY_T) and _is_key_just(KEY_T):
+		_rotation_offset.z -= ROTATION_STEP_DEG
+	if Input.is_key_pressed(KEY_G) and _is_key_just(KEY_G):
+		_rotation_offset.z += ROTATION_STEP_DEG
+
+# Debounce helper: tracks which keys were pressed last frame.
+var _prev_key_state: Dictionary = {}
+func _is_key_just(keycode: int) -> bool:
+	var currently := Input.is_key_pressed(keycode)
+	var was: bool = _prev_key_state.get(keycode, false)
+	_prev_key_state[keycode] = currently
+	return currently and not was
 
 # ── Public API ───────────────────────────────────────────────────────────────
 func setup(data: ItemData) -> void:
@@ -58,6 +115,9 @@ func pick_up() -> void:
 	is_held = true
 	is_placed = false
 	freeze = true
+	# Reset rotation offset on pick-up
+	_rotation_offset = Vector3.ZERO
+	_shift_held = false
 	# Disable collisions while dragging so it doesn't block raycasts
 	collision_layer = 0
 	collision_mask = 0
@@ -127,6 +187,9 @@ func _follow_mouse() -> void:
 	# Small hover above surface
 	target.y = follow_y + 0.05
 	global_position = target
+
+	# Apply accumulated rotation
+	rotation_degrees = _rotation_offset
 
 # ── Mesh builder (CSG-like using MeshInstance3D) ─────────────────────────────
 func _build_mesh(data: ItemData) -> MeshInstance3D:
