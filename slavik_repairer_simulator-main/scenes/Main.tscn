@@ -1,0 +1,75 @@
+[gd_scene format=3 uid="uid://cy4jta0d4ku07"]
+
+[ext_resource type="Script" uid="uid://vapvg6sposlw" path="res://scripts/Main.gd" id="1_main"]
+[ext_resource type="Script" uid="uid://4i6e12snxugn" path="res://scripts/CameraController.gd" id="2_camera"]
+[ext_resource type="PackedScene" uid="uid://ce2b1ad4ebe1k" path="res://a garage with a work station.glb" id="3_garage"]
+[ext_resource type="Script" uid="uid://bwhapnu215fvc" path="res://scripts/JunkBox.gd" id="4_box"]
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_table"]
+size = Vector3(2, 0.12, 1.5)
+
+[node name="Main" type="Node3D" unique_id=415965387]
+script = ExtResource("1_main")
+
+[node name="DirectionalLight3D" type="DirectionalLight3D" parent="." unique_id=499787112]
+transform = Transform3D(0.573576, -0.696364, 0.43128, 0, 0.525322, 0.850903, -0.819152, -0.488057, 0.301314, 0, 0, 0)
+light_color = Color(1, 0.95, 0.8, 1)
+light_energy = 1.2
+shadow_enabled = true
+
+[node name="OmniLight3D" type="OmniLight3D" parent="." unique_id=61429483]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.1336203, 0.1325419, 0.8585633)
+light_color = Color(0.5, 0.6, 0.8, 1)
+light_energy = 0.8
+
+[node name="TableViewTarget" type="Node3D" parent="." unique_id=939745630]
+transform = Transform3D(1, 0, 0, 0, 0.707107, 0.707107, 0, -0.707107, 0.707107, 0, 1.4, 1.2)
+
+[node name="UnderTableViewTarget" type="Node3D" parent="." unique_id=703505990]
+transform = Transform3D(0.992546, 0.014889, -0.120967, 0, 0.992546, 0.121881, 0.121881, -0.120967, 0.985148, 0.448, -0.316, -1.389)
+
+[node name="CameraController" type="Node3D" parent="." unique_id=2093328528]
+transform = Transform3D(1, 0, 0, 0, 0.707107, 0.707107, 0, -0.707107, 0.707107, 0, 1.4, 1.2)
+script = ExtResource("2_camera")
+
+[node name="Camera3D" type="Camera3D" parent="CameraController" unique_id=1648186827]
+transform = Transform3D(0.42822486, 0.63899267, -0.63899285, -0.63899255, 0.71411234, 0.28588742, 0.63899255, 0.2858876, 0.7141122, -0.60374665, -0.01958403, -0.996981)
+fov = 60.0
+far = 100.0
+
+[node name="GarageAndTable" parent="." unique_id=1303326482 instance=ExtResource("3_garage")]
+transform = Transform3D(0.943886, 0, 0.330273, 0, 1, 0, -0.330273, 0, 0.943886, -0.53302, -0.19935, -0.60585)
+
+[node name="TableStaticBody" type="StaticBody3D" parent="." unique_id=1352924510]
+transform = Transform3D(-0.14853762, 0, 0.47742704, 0, 0.5, 0, -0.47742704, 0, -0.14853762, 0.04834944, 0.15910655, 0.14620882)
+collision_mask = 0
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="TableStaticBody" unique_id=2059977477]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.016872019, 0.006432295, -0.31606257)
+shape = SubResource("BoxShape3D_table")
+
+[node name="AssemblyPivot" type="Node3D" parent="." unique_id=1099143501]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.12, 0)
+
+[node name="BoxA" type="StaticBody3D" parent="." unique_id=633883063]
+transform = Transform3D(0.061334442, 0, -0.19036303, 0, 0.2, 0, 0.19036303, 0, 0.061334442, -0.33161613, -0.0108045265, 0.004536271)
+collision_layer = 4
+collision_mask = 0
+script = ExtResource("4_box")
+box_color = Color(0.55, 0.32, 0.14, 1)
+
+[node name="BoxB" type="StaticBody3D" parent="." unique_id=832138351]
+transform = Transform3D(0.2, 0, 0, 0, 0.2, 0, 0, 0, 0.2, -0.26844144, -0.0064984113, 0.25470054)
+collision_layer = 4
+collision_mask = 0
+script = ExtResource("4_box")
+box_color = Color(0.2, 0.45, 0.25, 1)
+box_label = "Box B"
+
+[node name="BoxC" type="StaticBody3D" parent="." unique_id=543542442]
+transform = Transform3D(0.2, 0, 0, 0, 0.2, 0, 0, 0, 0.2, -0.101920485, -0.050217405, 0.4667024)
+collision_layer = 4
+collision_mask = 0
+script = ExtResource("4_box")
+box_color = Color(0.3, 0.3, 0.55, 1)
+box_label = "Box C"
