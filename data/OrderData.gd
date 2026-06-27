@@ -8,6 +8,10 @@ extends Resource
 ## Description shown to player
 @export var description: String = "Fix this thing with junk!"
 
+## 3D reference model (PackedScene) for silhouette comparison.
+## The SilhouetteChecker compares the player's assembly against this shape.
+@export var reference_model: PackedScene = null
+
 ## Array of target requirements.
 ## Each dict must have:
 ##   required_tag: String  - the tag a part must have

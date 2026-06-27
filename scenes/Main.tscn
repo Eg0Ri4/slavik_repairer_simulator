@@ -2,6 +2,7 @@
 
 [ext_resource type="Script" uid="uid://vapvg6sposlw" path="res://scripts/Main.gd" id="1_main"]
 [ext_resource type="Script" uid="uid://4i6e12snxugn" path="res://scripts/CameraController.gd" id="2_camera"]
+[ext_resource type="Resource" uid="uid://ccmvaffthu00f" path="res://orders/MyFirstOrder.tres" id="2_vcsgt"]
 [ext_resource type="PackedScene" uid="uid://ce2b1ad4ebe1k" path="res://a garage with a work station.glb" id="3_garage"]
 [ext_resource type="Script" uid="uid://bwhapnu215fvc" path="res://scripts/JunkBox.gd" id="4_box"]
 
@@ -10,6 +11,7 @@ size = Vector3(2, 0.12, 1.5)
 
 [node name="Main" type="Node3D" unique_id=415965387]
 script = ExtResource("1_main")
+current_order = ExtResource("2_vcsgt")
 
 [node name="DirectionalLight3D" type="DirectionalLight3D" parent="." unique_id=499787112]
 transform = Transform3D(0.573576, -0.696364, 0.43128, 0, 0.525322, 0.850903, -0.819152, -0.488057, 0.301314, 0, 0, 0)
@@ -44,7 +46,7 @@ fov = 60.0
 far = 100.0
 
 [node name="GarageAndTable" parent="." unique_id=1303326482 instance=ExtResource("3_garage")]
-transform = Transform3D(0.943886, 0, 0.330273, 0, 1, 0, -0.330273, 0, 0.943886, -0.53302, -0.19935, -0.60585)
+transform = Transform3D(0.943886, 0, 0.330273, 0, 1, 0, -0.330273, 0, 0.943886, -0.48915756, -0.19935, -0.60585)
 
 [node name="TableStaticBody" type="StaticBody3D" parent="." unique_id=1352924510]
 transform = Transform3D(-0.14853762, 0, 0.47742704, 0, 0.5, 0, -0.47742704, 0, -0.14853762, 0.22535664, 0.15910655, 0.14620882)

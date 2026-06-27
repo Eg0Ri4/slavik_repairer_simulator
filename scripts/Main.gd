@@ -8,7 +8,7 @@ var camera_controller: Node3D
 var assembly_pivot: Node3D
 var table: Node3D
 var attachment_system: AttachmentSystem
-var evaluation_system: EvaluationSystem
+var silhouette_checker: SilhouetteChecker
 var nail_tool: NailTool
 var tape_tool: TapeTool
 
@@ -33,10 +33,13 @@ var nail_status_label: Label
 # Hover highlight state
 var _hovered_box: JunkBox = null
 
-# Active order
-var _order: OrderData
+# Active order (drag-and-drop your OrderData .tres in the Inspector)
+@export var current_order: OrderData
 
 var _table_y: float = 0.3
+
+# Reference ghost (hologram preview of the target shape)
+var target_ghost: Node3D = null
 
 # ── Lifecycle ────────────────────────────────────────────────────────────────
 func _ready() -> void:
@@ -84,9 +87,9 @@ func _build_systems() -> void:
 	attachment_system.name = "AttachmentSystem"
 	add_child(attachment_system)
 
-	evaluation_system = EvaluationSystem.new()
-	evaluation_system.name = "EvaluationSystem"
-	add_child(evaluation_system)
+	silhouette_checker = SilhouetteChecker.new()
+	silhouette_checker.name = "SilhouetteChecker"
+	add_child(silhouette_checker)
 
 	nail_tool = NailTool.new()
 	nail_tool.name = "NailTool"
@@ -228,19 +231,102 @@ func _build_ui() -> void:
 
 # ── Order setup ──────────────────────────────────────────────────────────────
 func _setup_order() -> void:
-	_order = OrderData.new()
-	_order.order_name = "Broken Workshop Fan"
-	_order.description = "The workshop fan stopped working! Needs:\n• A BLADE near the top\n• A MOTOR in the center\n• A FRAME at the base"
-	_order.requirements = [
-		{"required_tag": "blade",  "target_position": Vector3(0.0,  0.30, 0.0), "points": 100},
-		{"required_tag": "motor",  "target_position": Vector3(0.0,  0.00, 0.0), "points": 150},
-		{"required_tag": "frame",  "target_position": Vector3(0.0, -0.20, 0.0), "points": 80},
-	]
-	_order.tolerance = 0.5
-	GameState.current_order = _order
+	# Use the Inspector-assigned order; fall back to a default if none set
+	if current_order == null:
+		current_order = OrderData.new()
+		current_order.order_name = "Broken Workshop Fan"
+		current_order.description = "The workshop fan stopped working!\nBuild something that LOOKS like a fan.\nIt doesn't have to be perfect — just close enough!"
+		push_warning("Main: No OrderData assigned in Inspector — using default.")
+
+	GameState.current_order = current_order
 
 	if order_desc_label:
-		order_desc_label.text = _order.description
+		order_desc_label.text = current_order.description
+
+	# ── Spawn holographic ghost of the reference model ───────────────────
+	_spawn_target_ghost()
+
+func _spawn_target_ghost() -> void:
+	# Clean up any previous ghost
+	if target_ghost and is_instance_valid(target_ghost):
+		target_ghost.queue_free()
+		target_ghost = null
+
+	if current_order == null or current_order.reference_model == null:
+		return
+
+	target_ghost = current_order.reference_model.instantiate() as Node3D
+	if target_ghost == null:
+		return
+
+	target_ghost.name = "TargetGhost"
+	assembly_pivot.add_child(target_ghost)
+	
+	if silhouette_checker:
+		# 1. Calculate size and auto-scale down if it's huge
+		var aabb := silhouette_checker._get_combined_aabb(target_ghost)
+		var max_extent = max(aabb.size.x, max(aabb.size.y, aabb.size.z))
+		var desired_max_size = 0.8  # Max 0.8 meters in any direction
+		
+		if max_extent > 0.01 and max_extent > desired_max_size:
+			var scale_factor = desired_max_size / max_extent
+			target_ghost.scale = Vector3.ONE * scale_factor
+			# Recompute AABB because the scale just changed its physical size
+			aabb = silhouette_checker._get_combined_aabb(target_ghost)
+			
+		# 2. Center the scaled ghost exactly at the assembly pivot
+		var center_offset := aabb.get_center() - target_ghost.global_position
+		target_ghost.global_position = assembly_pivot.global_position - center_offset
+
+	# Strip all physics so it doesn't interfere with player parts
+	_strip_physics_recursive(target_ghost)
+	# Apply hologram material
+	_make_hologram(target_ghost)
+
+# ── Ghost hologram helpers ───────────────────────────────────────────────────
+
+## Recursively replaces all mesh materials with a transparent glowing hologram.
+func _make_hologram(node: Node) -> void:
+	if node is MeshInstance3D:
+		var mi := node as MeshInstance3D
+		var mat := StandardMaterial3D.new()
+		mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		mat.albedo_color = Color(0.2, 0.6, 1.0, 0.5)  # light blue, 50% opacity
+		mat.emission_enabled = true
+		mat.emission = Color(0.2, 0.6, 1.0)             # matching blue glow
+		mat.emission_energy_multiplier = 2.0
+		mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		# Override all surface materials
+		for surf_idx in range(mi.get_surface_override_material_count()):
+			mi.set_surface_override_material(surf_idx, mat)
+		# Also set the material_override as a catch-all
+		mi.material_override = mat
+
+	for child in node.get_children():
+		_make_hologram(child)
+
+## Recursively removes or disables all physics nodes so the ghost is purely visual.
+func _strip_physics_recursive(node: Node) -> void:
+	# Process children first (bottom-up) so freeing a parent doesn't skip children
+	var children := node.get_children()
+	for child in children:
+		_strip_physics_recursive(child)
+
+	if node is CollisionShape3D or node is CollisionPolygon3D:
+		node.queue_free()
+	elif node is RigidBody3D:
+		# Freeze rigid bodies so they don't simulate
+		(node as RigidBody3D).freeze = true
+		(node as RigidBody3D).collision_layer = 0
+		(node as RigidBody3D).collision_mask = 0
+	elif node is StaticBody3D or node is AnimatableBody3D:
+		(node as PhysicsBody3D).collision_layer = 0
+		(node as PhysicsBody3D).collision_mask = 0
+	elif node is Area3D:
+		(node as Area3D).collision_layer = 0
+		(node as Area3D).collision_mask = 0
+		(node as Area3D).monitoring = false
+		(node as Area3D).monitorable = false
 
 # ── Input handling ────────────────────────────────────────────────────────────
 func _input(event: InputEvent) -> void:
@@ -619,7 +705,7 @@ func _update_tool_buttons() -> void:
 				nail_status_label.text = ""
 
 func _on_trust_me_pressed() -> void:
-	if _order == null or result_label == null:
+	if current_order == null or result_label == null:
 		return
 
 	var placed_count: int = 0
@@ -631,27 +717,38 @@ func _on_trust_me_pressed() -> void:
 		result_label.text = "❌ Nothing is attached yet!\nGrab some junk from the boxes!"
 		return
 
-	var eval_result := evaluation_system.evaluate(assembly_pivot, _order)
-	var pct: int    = eval_result["percentage"]
-	var grade: String = evaluation_system.grade_label(pct)
-	var score: int  = eval_result["total_score"]
-	var max_s: int  = eval_result["max_score"]
+	# Disable button while async check runs
+	trust_me_btn.disabled = true
+	result_label.text = "🔍 Analyzing silhouette..."
 
-	var detail: String = ""
-	for req in eval_result["requirements"]:
-		var tag: String    = req["tag"]
-		var earned: int    = req["points_earned"]
-		var possible: int  = req["points_possible"]
-		var found: bool    = req["found"]
-		var icon: String   = "✅" if earned == possible else ("⚠️" if earned > 0 else "❌")
-		if not found:
-			detail += "%s [%s]: Not found (0/%d pts)\n" % [icon, tag, possible]
-		else:
-			var dist: float = req["distance"]
-			detail += "%s [%s]: %.2fm away (%d/%d pts)\n" % [icon, tag, dist, earned, possible]
+	# Hide the ghost so it doesn't corrupt the silhouette capture
+	if target_ghost and is_instance_valid(target_ghost):
+		target_ghost.hide()
 
-	result_label.text = "━━━ EVALUATION ━━━\n%s\nScore: %d / %d (%d%%)\n\n%s" % [
-		grade, score, max_s, pct, detail
+	var sil_result: Dictionary = await silhouette_checker.check(assembly_pivot, current_order)
+
+	# Restore the ghost
+	if target_ghost and is_instance_valid(target_ghost):
+		target_ghost.show()
+
+	trust_me_btn.disabled = false
+
+	var score: float  = sil_result["score"]
+	var passed: bool  = sil_result["passed"]
+	var grade: String = sil_result["grade"]
+	var per_view: Array = sil_result["per_view"]
+	var pct: int = int(score * 100.0)
+
+	var status_icon: String = "✅" if passed else "❌"
+	var view_detail: String = "Front: %d%%  |  Side: %d%%  |  Top: %d%%" % [
+		int(per_view[0] * 100.0),
+		int(per_view[1] * 100.0),
+		int(per_view[2] * 100.0),
+	]
+
+	result_label.text = "━━━ EVALUATION ━━━\n%s %s\nShape Match: %d%%\n%s\n%s" % [
+		status_icon, grade, pct, view_detail,
+		"PASSED! 🎉" if passed else "Doesn't look right... keep trying!"
 	]
 
 func _on_reset_pressed() -> void:

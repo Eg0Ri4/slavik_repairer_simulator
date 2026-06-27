@@ -1,0 +1,10 @@
+[gd_resource type="Resource" script_class="OrderData" format=3 uid="uid://ccmvaffthu00f"]
+
+[ext_resource type="Script" uid="uid://bh8rmquycec4n" path="res://data/OrderData.gd" id="1_ngglj"]
+[ext_resource type="PackedScene" uid="uid://bcwjvbujiufqq" path="res://orders/foto.tscn" id="1_t5kxu"]
+
+[resource]
+script = ExtResource("1_ngglj")
+order_name = "photocamera"
+reference_model = ExtResource("1_t5kxu")
+metadata/_custom_type_script = "uid://bh8rmquycec4n"

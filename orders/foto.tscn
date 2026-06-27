@@ -1,0 +1,9 @@
+[gd_scene format=3 uid="uid://bcwjvbujiufqq"]
+
+[ext_resource type="PackedScene" uid="uid://bitgcvijdufms" path="res://scenes/foto.glb" id="1_pe8tt"]
+
+[node name="Tinkercad GLTF Scene" unique_id=331566136 instance=ExtResource("1_pe8tt")]
+
+[node name="Mesh_Mesh_head_geo_001_lambert2SG_001" parent="Node" parent_id_path=PackedInt32Array(1849789064) index="0" unique_id=1045475961]
+transform = Transform3D(-0.02432457, -0.075699516, -0.008826005, 0.076185785, -0.02439687, -0.0007200313, -0.0020102612, -0.008624133, 0.07950838, -7.6254597, -10.583361, -1.9694777)
+layers = 1023
