@@ -2,9 +2,9 @@
 ## A visual nail that can be struck repeatedly to drive it into a surface.
 ## Each strike() call tweens the nail deeper along its local -Y axis.
 ## When target depth is reached, the nail reparents to the surface body
-## and creates a PinJoint3D between the two bodies it connects.
+## and creates a Generic6DOFJoint3D between the two bodies it connects.
 class_name Nail
-extends Node3D
+extends RigidBody3D
 
 # ── Configuration ────────────────────────────────────────────────────────────
 ## How far the nail sinks per full-power hit (meters).
@@ -25,6 +25,9 @@ signal nail_fastened()
 var _current_depth: float = 0.0
 var _is_fastened: bool = false
 var _is_animating: bool = false
+var _is_dropped: bool = false
+var _joint: Generic6DOFJoint3D = null
+var _grace_timer_ref: SceneTreeTimer = null
 
 ## The body the nail is being driven INTO (the surface).
 var _surface_body: Node3D = null
@@ -46,8 +49,20 @@ const TIP_HEIGHT: float = 0.012
 
 # ── Lifecycle ────────────────────────────────────────────────────────────────
 func _ready() -> void:
+	freeze = true
+	collision_layer = 0
+	collision_mask = 0
 	_build_visual()
 	_build_head_area()
+	_build_collision()
+	
+	_grace_timer_ref = get_tree().create_timer(5.0)
+	_grace_timer_ref.timeout.connect(_on_grace_timeout)
+
+func _on_grace_timeout() -> void:
+	if not is_instance_valid(self): return
+	if _current_depth == 0.0 and not _is_fastened:
+		_drop()
 
 
 ## Call after instantiating to tell the nail which bodies it connects.
@@ -59,8 +74,13 @@ func setup(surface_body: Node3D, top_body: Node3D = null) -> void:
 # ── Strike API ───────────────────────────────────────────────────────────────
 ## Call this when the player hits the nail. power: 0.0–1.0 (default 1.0).
 func strike(power: float = 1.0) -> void:
-	if _is_fastened or _is_animating:
+	if _is_fastened or _is_animating or _is_dropped:
 		return
+
+	if _grace_timer_ref:
+		if _grace_timer_ref.timeout.is_connected(_on_grace_timeout):
+			_grace_timer_ref.timeout.disconnect(_on_grace_timeout)
+		_grace_timer_ref = null
 
 	_is_animating = true
 
@@ -107,11 +127,80 @@ func _fasten() -> void:
 		reparent(_surface_body, false)
 		global_transform = t
 
-	# Create a PinJoint3D between the two bodies (if both exist)
+	# Create a Generic6DOFJoint3D between the two bodies (if both exist)
 	if _surface_body and _top_body:
 		_create_joint()
 
 	nail_fastened.emit()
+
+func pull(power: float = 1.0) -> void:
+	if _is_animating or _is_dropped:
+		return
+
+	_is_animating = true
+
+	var pull_amount: float = sink_per_hit * clampf(power, 0.3, 1.0)
+	_current_depth -= pull_amount
+	_current_depth = maxf(_current_depth, 0.0)
+
+	# Tween the nail up its local Y axis (out of the surface)
+	var pull_dir: Vector3 = global_basis.y.normalized()
+	var target_pos: Vector3 = global_position + pull_dir * pull_amount
+
+	var tw := create_tween()
+	tw.set_ease(Tween.EASE_OUT)
+	tw.set_trans(Tween.TRANS_BACK)
+	tw.tween_property(self, "global_position", target_pos, sink_tween_duration)
+
+	var wobble_deg := randf_range(-2.0, 2.0)
+	tw.parallel().tween_property(
+		self, "rotation_degrees",
+		rotation_degrees + Vector3(wobble_deg, 0.0, wobble_deg * 0.5),
+		sink_tween_duration
+	)
+
+	tw.finished.connect(_on_pull_finished)
+
+	var progress: float = _current_depth / target_depth
+	nail_struck.emit(progress)
+
+func _on_pull_finished() -> void:
+	_is_animating = false
+	if _current_depth <= 0.0:
+		_unfasten()
+
+func _unfasten() -> void:
+	if _is_fastened:
+		_is_fastened = false
+		_break_joint()
+	_drop()
+
+func _break_joint() -> void:
+	if is_instance_valid(_joint):
+		_joint.queue_free()
+		_joint = null
+
+func _drop() -> void:
+	_is_dropped = true
+	if get_parent() and get_parent().name != "Main":
+		var scene_root = get_tree().current_scene
+		if scene_root:
+			var t = global_transform
+			reparent(scene_root, true)
+			global_transform = t
+			
+	freeze = false
+	collision_layer = 2 # placed parts layer
+	collision_mask = 3  # table + parts
+	
+	_start_decay_timer()
+
+func _start_decay_timer() -> void:
+	var t = get_tree().create_timer(10.0)
+	t.timeout.connect(func():
+		if is_instance_valid(self):
+			queue_free()
+	)
 
 
 func _create_joint() -> void:
@@ -132,39 +221,39 @@ func _create_joint() -> void:
 	# Each nail adds a constraint at its specific position. Multiple nails
 	# at different spots (e.g. 4 corners) create overlapping constraints
 	# that naturally eliminate all wobble — like real nails.
-	var joint := Generic6DOFJoint3D.new()
-	joint.exclude_nodes_from_collision = true
+	_joint = Generic6DOFJoint3D.new()
+	_joint.exclude_nodes_from_collision = true
 
 	# Near-zero linear play (±0.5mm) — bodies can't slide apart
 	var lin_play := 0.0005
-	joint.set_flag_x(Generic6DOFJoint3D.FLAG_ENABLE_LINEAR_LIMIT, true)
-	joint.set_flag_y(Generic6DOFJoint3D.FLAG_ENABLE_LINEAR_LIMIT, true)
-	joint.set_flag_z(Generic6DOFJoint3D.FLAG_ENABLE_LINEAR_LIMIT, true)
-	joint.set_param_x(Generic6DOFJoint3D.PARAM_LINEAR_LOWER_LIMIT, -lin_play)
-	joint.set_param_x(Generic6DOFJoint3D.PARAM_LINEAR_UPPER_LIMIT,  lin_play)
-	joint.set_param_y(Generic6DOFJoint3D.PARAM_LINEAR_LOWER_LIMIT, -lin_play)
-	joint.set_param_y(Generic6DOFJoint3D.PARAM_LINEAR_UPPER_LIMIT,  lin_play)
-	joint.set_param_z(Generic6DOFJoint3D.PARAM_LINEAR_LOWER_LIMIT, -lin_play)
-	joint.set_param_z(Generic6DOFJoint3D.PARAM_LINEAR_UPPER_LIMIT,  lin_play)
+	_joint.set_flag_x(Generic6DOFJoint3D.FLAG_ENABLE_LINEAR_LIMIT, true)
+	_joint.set_flag_y(Generic6DOFJoint3D.FLAG_ENABLE_LINEAR_LIMIT, true)
+	_joint.set_flag_z(Generic6DOFJoint3D.FLAG_ENABLE_LINEAR_LIMIT, true)
+	_joint.set_param_x(Generic6DOFJoint3D.PARAM_LINEAR_LOWER_LIMIT, -lin_play)
+	_joint.set_param_x(Generic6DOFJoint3D.PARAM_LINEAR_UPPER_LIMIT,  lin_play)
+	_joint.set_param_y(Generic6DOFJoint3D.PARAM_LINEAR_LOWER_LIMIT, -lin_play)
+	_joint.set_param_y(Generic6DOFJoint3D.PARAM_LINEAR_UPPER_LIMIT,  lin_play)
+	_joint.set_param_z(Generic6DOFJoint3D.PARAM_LINEAR_LOWER_LIMIT, -lin_play)
+	_joint.set_param_z(Generic6DOFJoint3D.PARAM_LINEAR_UPPER_LIMIT,  lin_play)
 
 	# Near-zero angular play (~0.3°) — bodies can't rotate relative to each other
 	var ang_play := 0.005
-	joint.set_flag_x(Generic6DOFJoint3D.FLAG_ENABLE_ANGULAR_LIMIT, true)
-	joint.set_flag_y(Generic6DOFJoint3D.FLAG_ENABLE_ANGULAR_LIMIT, true)
-	joint.set_flag_z(Generic6DOFJoint3D.FLAG_ENABLE_ANGULAR_LIMIT, true)
-	joint.set_param_x(Generic6DOFJoint3D.PARAM_ANGULAR_LOWER_LIMIT, -ang_play)
-	joint.set_param_x(Generic6DOFJoint3D.PARAM_ANGULAR_UPPER_LIMIT,  ang_play)
-	joint.set_param_y(Generic6DOFJoint3D.PARAM_ANGULAR_LOWER_LIMIT, -ang_play)
-	joint.set_param_y(Generic6DOFJoint3D.PARAM_ANGULAR_UPPER_LIMIT,  ang_play)
-	joint.set_param_z(Generic6DOFJoint3D.PARAM_ANGULAR_LOWER_LIMIT, -ang_play)
-	joint.set_param_z(Generic6DOFJoint3D.PARAM_ANGULAR_UPPER_LIMIT,  ang_play)
+	_joint.set_flag_x(Generic6DOFJoint3D.FLAG_ENABLE_ANGULAR_LIMIT, true)
+	_joint.set_flag_y(Generic6DOFJoint3D.FLAG_ENABLE_ANGULAR_LIMIT, true)
+	_joint.set_flag_z(Generic6DOFJoint3D.FLAG_ENABLE_ANGULAR_LIMIT, true)
+	_joint.set_param_x(Generic6DOFJoint3D.PARAM_ANGULAR_LOWER_LIMIT, -ang_play)
+	_joint.set_param_x(Generic6DOFJoint3D.PARAM_ANGULAR_UPPER_LIMIT,  ang_play)
+	_joint.set_param_y(Generic6DOFJoint3D.PARAM_ANGULAR_LOWER_LIMIT, -ang_play)
+	_joint.set_param_y(Generic6DOFJoint3D.PARAM_ANGULAR_UPPER_LIMIT,  ang_play)
+	_joint.set_param_z(Generic6DOFJoint3D.PARAM_ANGULAR_LOWER_LIMIT, -ang_play)
+	_joint.set_param_z(Generic6DOFJoint3D.PARAM_ANGULAR_UPPER_LIMIT,  ang_play)
 
 	# Add to the common parent (assembly pivot) first, then assign paths
 	var common_parent := _surface_body.get_parent()
 	if common_parent:
-		common_parent.add_child(joint)
-		joint.global_position = global_position
-		_do_assign_joint_paths.call_deferred(joint, _surface_body, _top_body)
+		common_parent.add_child(_joint)
+		_joint.global_position = global_position
+		_do_assign_joint_paths.call_deferred(_joint, _surface_body, _top_body)
 
 func _do_assign_joint_paths(joint: Joint3D, body_a: Node3D, body_b: Node3D) -> void:
 	if is_instance_valid(joint) and is_instance_valid(body_a) and is_instance_valid(body_b):
@@ -255,3 +344,12 @@ func _build_head_area() -> void:
 	col.position = Vector3(0, HEAD_HEIGHT * 0.5, 0)
 	_head_area.add_child(col)
 	add_child(_head_area)
+
+func _build_collision() -> void:
+	var col := CollisionShape3D.new()
+	var cyl := CylinderShape3D.new()
+	cyl.radius = SHAFT_RADIUS
+	cyl.height = SHAFT_HEIGHT + TIP_HEIGHT + HEAD_HEIGHT
+	col.shape = cyl
+	col.position = Vector3(0, -SHAFT_HEIGHT * 0.5, 0)
+	add_child(col)

@@ -8,57 +8,72 @@ class_name AttachmentSystem
 extends Node
 
 func attach(new_part: JunkPart, assembly_pivot: Node3D) -> Joint3D:
-	# Find nearest existing placed part
 	var nearest: JunkPart = _find_nearest_placed(new_part, assembly_pivot)
+	return _create_bolt_joint(new_part, nearest, assembly_pivot)
 
-	var joint: Joint3D
-	match GameState.active_tool:
-		"bolts":
-			joint = _create_bolt_joint(new_part, nearest, assembly_pivot)
-		"tape":
-			joint = _create_tape_joint(new_part, nearest, assembly_pivot)
-		_:
-			joint = _create_bolt_joint(new_part, nearest, assembly_pivot)
+func create_manual_tape_joint(body1: Node3D, pos1: Vector3, body2: Node3D, pos2: Vector3, pivot: Node3D) -> Joint3D:
+	var joint := Generic6DOFJoint3D.new()
+
+	# Make it springy/wobbly on its axes
+	joint.set_param_x(Generic6DOFJoint3D.PARAM_LINEAR_SPRING_STIFFNESS, 15.0)
+	joint.set_param_x(Generic6DOFJoint3D.PARAM_LINEAR_SPRING_DAMPING, 1.0)
+	joint.set_flag_x(Generic6DOFJoint3D.FLAG_ENABLE_LINEAR_SPRING, true)
+	
+	joint.set_param_y(Generic6DOFJoint3D.PARAM_LINEAR_SPRING_STIFFNESS, 15.0)
+	joint.set_param_y(Generic6DOFJoint3D.PARAM_LINEAR_SPRING_DAMPING, 1.0)
+	joint.set_flag_y(Generic6DOFJoint3D.FLAG_ENABLE_LINEAR_SPRING, true)
+	
+	joint.set_param_z(Generic6DOFJoint3D.PARAM_LINEAR_SPRING_STIFFNESS, 15.0)
+	joint.set_param_z(Generic6DOFJoint3D.PARAM_LINEAR_SPRING_DAMPING, 1.0)
+	joint.set_flag_z(Generic6DOFJoint3D.FLAG_ENABLE_LINEAR_SPRING, true)
+
+	joint.set_param_x(Generic6DOFJoint3D.PARAM_ANGULAR_SPRING_STIFFNESS, 15.0)
+	joint.set_param_x(Generic6DOFJoint3D.PARAM_ANGULAR_SPRING_DAMPING, 1.0)
+	joint.set_flag_x(Generic6DOFJoint3D.FLAG_ENABLE_ANGULAR_SPRING, true)
+	
+	joint.set_param_y(Generic6DOFJoint3D.PARAM_ANGULAR_SPRING_STIFFNESS, 15.0)
+	joint.set_param_y(Generic6DOFJoint3D.PARAM_ANGULAR_SPRING_DAMPING, 1.0)
+	joint.set_flag_y(Generic6DOFJoint3D.FLAG_ENABLE_ANGULAR_SPRING, true)
+
+	joint.set_param_z(Generic6DOFJoint3D.PARAM_ANGULAR_SPRING_STIFFNESS, 15.0)
+	joint.set_param_z(Generic6DOFJoint3D.PARAM_ANGULAR_SPRING_DAMPING, 1.0)
+	joint.set_flag_z(Generic6DOFJoint3D.FLAG_ENABLE_ANGULAR_SPRING, true)
+
+	pivot.add_child(joint)
+	joint.global_position = (pos1 + pos2) * 0.5
+	
+	_assign_paths_deferred.call_deferred(joint, body2, body1)
+
+	# Procedural Visual Mesh
+	var mesh_inst = MeshInstance3D.new()
+	var m = BoxMesh.new()
+	var dist = pos1.distance_to(pos2)
+	m.size = Vector3(0.04, 0.005, dist)
+	var mat = StandardMaterial3D.new()
+	mat.albedo_color = Color(0.7, 0.7, 0.65)
+	mat.roughness = 0.9
+	m.surface_set_material(0, mat)
+	mesh_inst.mesh = m
+	
+	pivot.add_child(mesh_inst)
+	mesh_inst.global_position = (pos1 + pos2) * 0.5
+	if dist > 0.001:
+		mesh_inst.look_at(pos2, Vector3.UP if abs((pos2 - pos1).normalized().y) < 0.99 else Vector3.RIGHT)
+		
+	# Parent to body1 dynamically so it stays attached and rotates
+	var old_transform = mesh_inst.global_transform
+	mesh_inst.reparent(body1, true)
+	mesh_inst.global_transform = old_transform
 
 	return joint
 
 # ── Joint factories ──────────────────────────────────────────────────────────
-func _create_bolt_joint(new_part: JunkPart, anchor: JunkPart, pivot: Node3D) -> Joint3D:
+func _create_bolt_joint(new_part: Node3D, anchor: Node3D, pivot: Node3D) -> Joint3D:
 	var joint := PinJoint3D.new()
 	_setup_joint(joint, new_part, anchor, pivot)
 	return joint
 
-func _create_tape_joint(new_part: JunkPart, anchor: JunkPart, pivot: Node3D) -> Joint3D:
-	var joint := Generic6DOFJoint3D.new()
-
-	# Soft angular limits — gives a wobbly tape feel
-	joint.set_flag_x(Generic6DOFJoint3D.FLAG_ENABLE_ANGULAR_LIMIT, true)
-	joint.set_flag_y(Generic6DOFJoint3D.FLAG_ENABLE_ANGULAR_LIMIT, true)
-	joint.set_flag_z(Generic6DOFJoint3D.FLAG_ENABLE_ANGULAR_LIMIT, true)
-
-	joint.set_param_x(Generic6DOFJoint3D.PARAM_ANGULAR_LOWER_LIMIT, -0.3)
-	joint.set_param_x(Generic6DOFJoint3D.PARAM_ANGULAR_UPPER_LIMIT,  0.3)
-	joint.set_param_y(Generic6DOFJoint3D.PARAM_ANGULAR_LOWER_LIMIT, -0.3)
-	joint.set_param_y(Generic6DOFJoint3D.PARAM_ANGULAR_UPPER_LIMIT,  0.3)
-	joint.set_param_z(Generic6DOFJoint3D.PARAM_ANGULAR_LOWER_LIMIT, -0.15)
-	joint.set_param_z(Generic6DOFJoint3D.PARAM_ANGULAR_UPPER_LIMIT,  0.15)
-
-	# Small linear "give"
-	joint.set_flag_x(Generic6DOFJoint3D.FLAG_ENABLE_LINEAR_LIMIT, true)
-	joint.set_flag_y(Generic6DOFJoint3D.FLAG_ENABLE_LINEAR_LIMIT, true)
-	joint.set_flag_z(Generic6DOFJoint3D.FLAG_ENABLE_LINEAR_LIMIT, true)
-
-	joint.set_param_x(Generic6DOFJoint3D.PARAM_LINEAR_LOWER_LIMIT, -0.02)
-	joint.set_param_x(Generic6DOFJoint3D.PARAM_LINEAR_UPPER_LIMIT,  0.02)
-	joint.set_param_y(Generic6DOFJoint3D.PARAM_LINEAR_LOWER_LIMIT, -0.02)
-	joint.set_param_y(Generic6DOFJoint3D.PARAM_LINEAR_UPPER_LIMIT,  0.02)
-	joint.set_param_z(Generic6DOFJoint3D.PARAM_LINEAR_LOWER_LIMIT, -0.02)
-	joint.set_param_z(Generic6DOFJoint3D.PARAM_LINEAR_UPPER_LIMIT,  0.02)
-
-	_setup_joint(joint, new_part, anchor, pivot)
-	return joint
-
-func _setup_joint(joint: Joint3D, new_part: JunkPart, anchor: JunkPart, pivot: Node3D) -> void:
+func _setup_joint(joint: Joint3D, new_part: Node3D, anchor: Node3D, pivot: Node3D) -> void:
 	# CRITICAL: add to scene tree FIRST, then assign node paths and transforms
 	pivot.add_child(joint)
 
@@ -71,7 +86,7 @@ func _setup_joint(joint: Joint3D, new_part: JunkPart, anchor: JunkPart, pivot: N
 	# Now we can safely call get_path_to (nodes must share a common ancestor)
 	_assign_paths_deferred.call_deferred(joint, new_part, anchor)
 
-func _assign_paths_deferred(joint: Joint3D, new_part: JunkPart, anchor: JunkPart) -> void:
+func _assign_paths_deferred(joint: Joint3D, new_part: Node3D, anchor: Node3D) -> void:
 	if not is_instance_valid(joint) or not is_instance_valid(new_part) or not joint.is_inside_tree() or not new_part.is_inside_tree():
 		return
 	if anchor and is_instance_valid(anchor) and anchor.is_inside_tree():
