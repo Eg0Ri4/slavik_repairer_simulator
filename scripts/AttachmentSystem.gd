@@ -11,7 +11,7 @@ func attach(new_part: JunkPart, assembly_pivot: Node3D) -> Joint3D:
 	var nearest: JunkPart = _find_nearest_placed(new_part, assembly_pivot)
 	return _create_bolt_joint(new_part, nearest, assembly_pivot)
 
-func create_manual_tape_joint(body1: Node3D, pos1: Vector3, body2: Node3D, pos2: Vector3, pivot: Node3D) -> Joint3D:
+func create_manual_tape_joint(body1: Node3D, pos1: Vector3, norm1: Vector3, body2: Node3D, pos2: Vector3, norm2: Vector3, pivot: Node3D) -> Joint3D:
 	var joint := Generic6DOFJoint3D.new()
 
 	# Make it springy/wobbly on its axes
@@ -44,27 +44,115 @@ func create_manual_tape_joint(body1: Node3D, pos1: Vector3, body2: Node3D, pos2:
 	
 	_assign_paths_deferred.call_deferred(joint, body2, body1)
 
-	# Procedural Visual Mesh
+	# Procedural Visual Mesh with Segmentation and V-Ends
 	var mesh_inst = MeshInstance3D.new()
-	var m = BoxMesh.new()
-	var dist = pos1.distance_to(pos2)
-	m.size = Vector3(0.04, 0.005, dist)
+	var mesh = ImmediateMesh.new()
 	var mat = StandardMaterial3D.new()
-	mat.albedo_color = Color(0.7, 0.7, 0.65)
+	mat.albedo_color = Color(0.75, 0.75, 0.7)
 	mat.roughness = 0.9
-	m.surface_set_material(0, mat)
-	mesh_inst.mesh = m
+	mat.cull_mode = BaseMaterial3D.CULL_DISABLED
+	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	mesh_inst.material_override = mat
+	mesh_inst.mesh = mesh
 	
 	pivot.add_child(mesh_inst)
-	mesh_inst.global_position = (pos1 + pos2) * 0.5
-	if dist > 0.001:
-		mesh_inst.look_at(pos2, Vector3.UP if abs((pos2 - pos1).normalized().y) < 0.99 else Vector3.RIGHT)
+	# CRITICAL FIX: The vertices we calculate are in global coordinates.
+	# By forcing the mesh_inst global_transform to IDENTITY before adding vertices,
+	# local space == global space. Then reparent() preserves it properly!
+	mesh_inst.global_transform = Transform3D.IDENTITY
+	
+	var space := pivot.get_world_3d().direct_space_state
+	var segments := 12
+	var width := 0.04
+	
+	var pts := PackedVector3Array()
+	var normals := PackedVector3Array()
+	
+	# Sample intermediate points via raycasts to conform to surface
+	for i in range(segments + 1):
+		var t = float(i) / float(segments)
+		var base_pos = pos1.lerp(pos2, t)
+		var inter_norm = norm1.lerp(norm2, t).normalized()
 		
-	# Parent to body1 dynamically so it stays attached and rotates
-	var old_transform = mesh_inst.global_transform
+		var ray_start = base_pos + inter_norm * 0.1
+		var ray_end = base_pos - inter_norm * 0.1
+		var query = PhysicsRayQueryParameters3D.create(ray_start, ray_end)
+		query.collision_mask = 3
+		var hit = space.intersect_ray(query)
+		
+		var pt = base_pos
+		var n = inter_norm
+		if hit:
+			pt = hit["position"]
+			n = hit["normal"]
+			
+		pts.append(pt + n * 0.005)
+		normals.append(n)
+		
+	# Draw mesh
+	mesh.clear_surfaces()
+	mesh.surface_begin(Mesh.PRIMITIVE_TRIANGLES)
+	
+	for i in range(segments):
+		var p0 = pts[i]
+		var p1 = pts[i+1]
+		var n0 = normals[i]
+		var n1 = normals[i+1]
+		
+		var f0 = (p1 - p0).normalized()
+		if f0.length_squared() < 0.001: f0 = Vector3.FORWARD
+		var r0 = f0.cross(n0).normalized()
+		
+		var f1 = f0
+		if i < segments - 1:
+			var p2 = pts[i+2]
+			f1 = (p2 - p1).normalized()
+			if f1.length_squared() < 0.001: f1 = f0
+		var r1 = f1.cross(n1).normalized()
+		
+		var left0 = p0 - r0 * (width * 0.5)
+		var right0 = p0 + r0 * (width * 0.5)
+		var left1 = p1 - r1 * (width * 0.5)
+		var right1 = p1 + r1 * (width * 0.5)
+		
+		if i == 0:
+			var mid0 = p0 + f0 * 0.015
+			mesh.surface_add_vertex(left0)
+			mesh.surface_add_vertex(mid0)
+			mesh.surface_add_vertex(left1)
+			
+			mesh.surface_add_vertex(left1)
+			mesh.surface_add_vertex(mid0)
+			mesh.surface_add_vertex(right1)
+			
+			mesh.surface_add_vertex(right1)
+			mesh.surface_add_vertex(mid0)
+			mesh.surface_add_vertex(right0)
+		elif i == segments - 1:
+			var mid1 = p1 - f1 * 0.015
+			mesh.surface_add_vertex(left0)
+			mesh.surface_add_vertex(right0)
+			mesh.surface_add_vertex(mid1)
+			
+			mesh.surface_add_vertex(left0)
+			mesh.surface_add_vertex(mid1)
+			mesh.surface_add_vertex(left1)
+			
+			mesh.surface_add_vertex(right0)
+			mesh.surface_add_vertex(right1)
+			mesh.surface_add_vertex(mid1)
+		else:
+			mesh.surface_add_vertex(left0)
+			mesh.surface_add_vertex(right0)
+			mesh.surface_add_vertex(left1)
+			
+			mesh.surface_add_vertex(left1)
+			mesh.surface_add_vertex(right0)
+			mesh.surface_add_vertex(right1)
+			
+	mesh.surface_end()
+	
 	mesh_inst.reparent(body1, true)
-	mesh_inst.global_transform = old_transform
-
 	return joint
 
 # ── Joint factories ──────────────────────────────────────────────────────────
