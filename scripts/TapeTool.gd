@@ -16,6 +16,7 @@ var attachment_system: AttachmentSystem = null
 var _is_placing: bool = false
 var _start_body: Node3D = null
 var _start_pos: Vector3 = Vector3.ZERO
+var _start_normal: Vector3 = Vector3.UP
 var _preview_mesh: MeshInstance3D = null
 
 func _ready() -> void:
@@ -92,6 +93,7 @@ func _start_tape(hit: Dictionary) -> void:
 	_is_placing = true
 	_start_body = collider
 	_start_pos = hit["position"]
+	_start_normal = hit["normal"]
 	_preview_mesh.visible = true
 	tape_started.emit()
 
@@ -102,6 +104,7 @@ func _finish_tape(hit: Dictionary) -> void:
 		return
 	
 	var end_pos = hit["position"]
+	var end_normal = hit["normal"]
 	
 	if end_pos.distance_to(_start_pos) < 0.02:
 		tape_placement_blocked.emit("Tape too short!")
@@ -109,7 +112,7 @@ func _finish_tape(hit: Dictionary) -> void:
 		return
 		
 	if attachment_system:
-		attachment_system.create_manual_tape_joint(_start_body, _start_pos, end_body, end_pos, assembly_pivot)
+		attachment_system.create_manual_tape_joint(_start_body, _start_pos, _start_normal, end_body, end_pos, end_normal, assembly_pivot)
 	
 	_is_placing = false
 	_start_body = null
@@ -117,11 +120,15 @@ func _finish_tape(hit: Dictionary) -> void:
 	tape_finished.emit()
 
 func _update_preview(p1: Vector3, p2: Vector3) -> void:
+	if not _preview_mesh: return
+	_preview_mesh.visible = true
 	var dist = p1.distance_to(p2)
-	_preview_mesh.scale.z = dist
+	if dist < 0.001:
+		dist = 0.001
+		p2 = p1 + Vector3.FORWARD * dist
+	_preview_mesh.scale = Vector3(1, 1, dist)
 	_preview_mesh.global_position = (p1 + p2) * 0.5
-	if dist > 0.001:
-		_preview_mesh.look_at(p2, Vector3.UP if abs((p2 - p1).normalized().y) < 0.99 else Vector3.RIGHT)
+	_preview_mesh.look_at(p2, Vector3.UP if abs((p2 - p1).normalized().y) < 0.99 else Vector3.RIGHT)
 
 func _raycast_for_surface(origin: Vector3, direction: Vector3, space: PhysicsDirectSpaceState3D) -> Variant:
 	var query := PhysicsRayQueryParameters3D.create(origin, origin + direction * ray_distance)
