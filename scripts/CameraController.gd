@@ -1,83 +1,152 @@
 ## CameraController.gd
-## Handles smooth camera transitions between TABLE_VIEW and UNDER_TABLE_VIEW.
-## Also handles mouse-drag rotation of the AssemblyPivot in TABLE_VIEW,
-## BUT only when no part is currently held (RMB is then owned by JunkPart for
-## Skyrim-style inspect rotation).
+## Две Camera3D как дочерние ноды: MenuCamera (current=true) и GameCamera.
+## CameraController-нода сама НЕ двигается — твиним transform самих камер.
 extends Node3D
 
-# ── Inspector-configurable positions ─────────────────────────────────────────
-@export var table_view_target: Node3D
-@export var under_table_view_target: Node3D
+const MENU_CAM_NAME := "MenuCamera"
+const GAME_CAM_NAME := "GameCamera"
 
-@export var table_position: Vector3 = Vector3(0.0, 1.4, 1.2)
-@export var table_rotation_deg: Vector3 = Vector3(-45.0, 0.0, 0.0)
+@export var gameplay_tween_duration : float = 1.5
+@export var view_tween_duration     : float = 0.8
+@export var pivot_sensitivity       : float = 0.5
 
-@export var under_table_position: Vector3 = Vector3(0.448, -0.316, -1.389)
-@export var under_table_rotation_deg: Vector3 = Vector3(-7.0, -3.64, -41.9)
+@export var under_table_position : Vector3 = Vector3(0.448, -0.316, -1.389)
+@export var under_table_rotation : Vector3 = Vector3(-7.0, -3.64, -41.9)
 
-@export var tween_duration: float = 0.8
+var _menu_cam  : Camera3D = null
+var _game_cam  : Camera3D = null
+var _pivot     : Node3D   = null
+var _menu_ctrl : Node     = null
 
-# ── Pivot rotation settings ───────────────────────────────────────────────────
-@export var pivot_sensitivity: float = 0.5   # degrees per pixel of drag
+var _is_tweening : bool    = false
+var _rmb_down    : bool    = false
+var _last_mouse  : Vector2 = Vector2.ZERO
 
-# ── Internal refs ─────────────────────────────────────────────────────────────
-var _camera: Camera3D
-var _assembly_pivot: Node3D
-var _is_tweening: bool = false
+var _game_cam_local_pos : Vector3
+var _game_cam_local_rot : Vector3
 
-# Right-mouse drag state (assembly pivot orbit — only when no part is held)
-var _rmbDown: bool = false
-var _lastMousePos: Vector2 = Vector2.ZERO
-
-# ── Lifecycle ─────────────────────────────────────────────────────────────────
 func _ready() -> void:
-	_camera = get_node_or_null("Camera3D")
-	if _camera == null:
-		push_error("CameraController: no Camera3D child found!")
+	_menu_cam = get_node_or_null(MENU_CAM_NAME)
+	_game_cam = get_node_or_null(GAME_CAM_NAME)
+
+	if _menu_cam == null:
+		push_error("CameraController: нет дочерней ноды '%s'" % MENU_CAM_NAME)
+		return
+	if _game_cam == null:
+		push_error("CameraController: нет дочерней ноды '%s'" % GAME_CAM_NAME)
 		return
 
-	_assembly_pivot = get_node_or_null("../AssemblyPivot")
+	# Запоминаем родную позицию GameCamera (TABLE_VIEW) — берём из сцены
+	_game_cam_local_pos = _game_cam.position
+	_game_cam_local_rot = _game_cam.rotation_degrees
 
-	_apply_state_instant("TABLE_VIEW")
+	_pivot = get_node_or_null("../AssemblyPivot")
 
+	_menu_cam.current = true
+	_game_cam.current = false
+
+	# Ищем MenuController с задержкой (ui_layer добавляется в _ready Main.gd)
+	call_deferred("_connect_menu_controller")
+
+func _connect_menu_controller() -> void:
+	var main := get_parent()
+	if main == null:
+		return
+	_menu_ctrl = _find_by_signal(main, "game_started")
+	if _menu_ctrl:
+		if not _menu_ctrl.game_started.is_connected(_on_game_started):
+			_menu_ctrl.game_started.connect(_on_game_started)
+		if not _menu_ctrl.returned_to_menu.is_connected(_on_returned_to_menu):
+			_menu_ctrl.returned_to_menu.connect(_on_returned_to_menu)
+	else:
+		push_warning("CameraController: MenuController не найден, повтор через 0.5с")
+		await get_tree().create_timer(0.5).timeout
+		_connect_menu_controller()
+
+func _find_by_signal(root: Node, sig: String) -> Node:
+	for child in root.get_children():
+		if child.has_signal(sig):
+			return child
+		var found := _find_by_signal(child, sig)
+		if found:
+			return found
+	return null
+
+# ── Input ────────────────────────────────────────────────────────────────────
 func _input(event: InputEvent) -> void:
+	if _is_tweening or not GameState.is_playing():
+		return
+	if GameState.camera_state != "TABLE_VIEW" or GameState.held_part != null:
+		_rmb_down = false
+		return
+
+	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_RIGHT:
+		_rmb_down = event.pressed
+		if event.pressed:
+			_last_mouse = event.position
+	elif event is InputEventMouseMotion and _rmb_down:
+		if _pivot:
+			var d: Vector2 = event.position - _last_mouse
+			_last_mouse = event.position
+			_pivot.rotate_y(deg_to_rad(-d.x * pivot_sensitivity))
+			_pivot.rotate_x(deg_to_rad(-d.y * pivot_sensitivity * 0.5))
+
+# ── game_started ─────────────────────────────────────────────────────────────
+func _on_game_started() -> void:
 	if _is_tweening:
 		return
+	_is_tweening = true
 
-	# ── Right-drag to orbit the assembly — only when NOT holding a part ───────
-	# When a part IS held, RMB is consumed by JunkPart for Skyrim-style rotation.
-	if GameState.camera_state == "TABLE_VIEW" and GameState.held_part == null:
-		if event is InputEventMouseButton:
-			if event.button_index == MOUSE_BUTTON_RIGHT:
-				_rmbDown = event.pressed
-				if event.pressed:
-					_lastMousePos = event.position
-				# Do NOT call set_input_as_handled here — let it fall through
-				# so other nodes can still observe the mouse-button event if needed.
+	# GameCamera стартует с позиции MenuCamera
+	_game_cam.position         = _menu_cam.position
+	_game_cam.rotation_degrees = _menu_cam.rotation_degrees
+	_game_cam.current          = true
+	_menu_cam.current          = false
 
-		elif event is InputEventMouseMotion and _rmbDown:
-			if _assembly_pivot:
-				var delta: Vector2 = event.position - _lastMousePos
-				_lastMousePos = event.position
-				# Yaw (horizontal drag → Y rotation)
-				_assembly_pivot.rotate_y(deg_to_rad(-delta.x * pivot_sensitivity))
-				# Pitch (vertical drag → X rotation, halved to feel less sensitive)
-				_assembly_pivot.rotate_x(deg_to_rad(-delta.y * pivot_sensitivity * 0.5))
-	else:
-		# A part is held or we're in another view — cancel any in-progress orbit drag
-		# so it doesn't resume unexpectedly when the part is dropped.
-		_rmbDown = false
+	var tw := create_tween()
+	tw.set_parallel(true)
+	tw.set_ease(Tween.EASE_IN_OUT)
+	tw.set_trans(Tween.TRANS_SINE)
+	tw.tween_property(_game_cam, "position",         _game_cam_local_pos, gameplay_tween_duration)
+	tw.tween_property(_game_cam, "rotation_degrees", _game_cam_local_rot, gameplay_tween_duration)
+	tw.finished.connect(func() -> void:
+		_is_tweening = false
+		GameState.set_camera_state("TABLE_VIEW")
+		if _menu_ctrl and _menu_ctrl.has_method("show_gameplay_hud"):
+			_menu_ctrl.show_gameplay_hud()
+	, CONNECT_ONE_SHOT)
 
-# ── Public API ────────────────────────────────────────────────────────────────
+# ── returned_to_menu ─────────────────────────────────────────────────────────
+func _on_returned_to_menu() -> void:
+	if _is_tweening:
+		return
+	_is_tweening = true
+
+	var tw := create_tween()
+	tw.set_parallel(true)
+	tw.set_ease(Tween.EASE_IN_OUT)
+	tw.set_trans(Tween.TRANS_SINE)
+	tw.tween_property(_game_cam, "position",         _menu_cam.position,         gameplay_tween_duration)
+	tw.tween_property(_game_cam, "rotation_degrees", _menu_cam.rotation_degrees, gameplay_tween_duration)
+	tw.finished.connect(func() -> void:
+		_is_tweening = false
+		_menu_cam.current          = true
+		_game_cam.current          = false
+		# Восстанавливаем родную позицию (для следующего старта)
+		_game_cam.position         = _game_cam_local_pos
+		_game_cam.rotation_degrees = _game_cam_local_rot
+	, CONNECT_ONE_SHOT)
+
+# ── TABLE_VIEW / UNDER_TABLE_VIEW ────────────────────────────────────────────
 func go_to_table_view() -> void:
 	if GameState.camera_state == "TABLE_VIEW":
 		return
-	_tween_to("TABLE_VIEW")
+	_tween_view("TABLE_VIEW")
 
 func go_to_under_table_view() -> void:
 	if GameState.camera_state == "UNDER_TABLE_VIEW":
 		return
-	_tween_to("UNDER_TABLE_VIEW")
+	_tween_view("UNDER_TABLE_VIEW")
 
 func toggle_view() -> void:
 	if GameState.camera_state == "TABLE_VIEW":
@@ -85,59 +154,25 @@ func toggle_view() -> void:
 	else:
 		go_to_table_view()
 
-# ── Internal helpers ──────────────────────────────────────────────────────────
-func _apply_state_instant(state: String) -> void:
-	GameState.set_camera_state(state)
-	if state == "TABLE_VIEW":
-		if table_view_target:
-			global_position = table_view_target.global_position
-			global_rotation = table_view_target.global_rotation
-		else:
-			position = table_position
-			rotation_degrees = table_rotation_deg
-	else:
-		if under_table_view_target:
-			global_position = under_table_view_target.global_position
-			global_rotation = under_table_view_target.global_rotation
-		else:
-			position = under_table_position
-			rotation_degrees = under_table_rotation_deg
-
-func _tween_to(new_state: String) -> void:
-	if _is_tweening:
+func _tween_view(new_state: String) -> void:
+	if _is_tweening or _game_cam == null:
 		return
 	_is_tweening = true
 	GameState.set_camera_state(new_state)
 
-	var target_pos: Vector3
-	var target_rot: Vector3
-	var use_global := false
-
+	var tgt_pos : Vector3
+	var tgt_rot : Vector3
 	if new_state == "TABLE_VIEW":
-		if table_view_target:
-			target_pos = table_view_target.global_position
-			target_rot = table_view_target.global_rotation_degrees
-			use_global = true
-		else:
-			target_pos = table_position
-			target_rot = table_rotation_deg
+		tgt_pos = _game_cam_local_pos
+		tgt_rot = _game_cam_local_rot
 	else:
-		if under_table_view_target:
-			target_pos = under_table_view_target.global_position
-			target_rot = under_table_view_target.global_rotation_degrees
-			use_global = true
-		else:
-			target_pos = under_table_position
-			target_rot = under_table_rotation_deg
+		tgt_pos = under_table_position
+		tgt_rot = under_table_rotation
 
-	var tw: Tween = create_tween()
+	var tw := create_tween()
 	tw.set_parallel(true)
 	tw.set_ease(Tween.EASE_IN_OUT)
 	tw.set_trans(Tween.TRANS_CUBIC)
-	if use_global:
-		tw.tween_property(self, "global_position", target_pos, tween_duration)
-		tw.tween_property(self, "global_rotation_degrees", target_rot, tween_duration)
-	else:
-		tw.tween_property(self, "position", target_pos, tween_duration)
-		tw.tween_property(self, "rotation_degrees", target_rot, tween_duration)
+	tw.tween_property(_game_cam, "position",         tgt_pos, view_tween_duration)
+	tw.tween_property(_game_cam, "rotation_degrees", tgt_rot, view_tween_duration)
 	tw.finished.connect(func() -> void: _is_tweening = false, CONNECT_ONE_SHOT)

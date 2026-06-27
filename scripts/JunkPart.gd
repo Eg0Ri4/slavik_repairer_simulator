@@ -26,8 +26,17 @@ const SCROLL_HEIGHT_STEP: float = 0.05
 const SCROLL_HEIGHT_MAX: float = 1.5
 
 # ── Rotation state ───────────────────────────────────────────────────────────
+## Rotation step for keyboard inputs (radians).
+const ROTATION_STEP: float = deg_to_rad(15.0)
+
+## Mouse rotation sensitivity for Shift+drag (degrees per pixel).
+const MOUSE_ROT_SENSITIVITY: float = 0.4
+
 ## Mouse rotation sensitivity for RMB Skyrim-style inspect (radians per pixel).
 const RMB_ROT_SPEED: float = 0.005
+
+## Whether the Shift key is currently held (for legacy Shift+drag mouse rotation mode).
+var _shift_held: bool = false
 
 ## Whether RMB is currently held for Skyrim-style item inspection rotation.
 var _rmb_held: bool = false
@@ -37,9 +46,6 @@ func _ready() -> void:
 	freeze = true
 	collision_layer = 2
 	collision_mask = 3   # table + parts (1 + 2 = 3)
-	# Moderate damping — parts settle naturally without sticking
-	linear_damp = 0.5
-	angular_damp = 1.0
 
 func _physics_process(_delta: float) -> void:
 	if is_held:
@@ -83,6 +89,51 @@ func _unhandled_input(event: InputEvent) -> void:
 		get_viewport().set_input_as_handled()
 		return
 
+	# ── Keyboard events ──────────────────────────────────────────────────────
+	if event is InputEventKey:
+		# Shift key tracking
+		if event.keycode == KEY_SHIFT:
+			if event.pressed and not event.is_echo():
+				_shift_held = true
+			elif not event.pressed:
+				_shift_held = false
+
+		# Rotation hotkeys (only on initial press, ignore echo/repeat)
+		elif event.pressed and not event.is_echo():
+			match event.keycode:
+				KEY_Q:
+					rotate_object_local(Vector3.UP, -ROTATION_STEP)
+					_update_cluster_transforms()
+					get_viewport().set_input_as_handled()
+				KEY_E:
+					rotate_object_local(Vector3.UP,  ROTATION_STEP)
+					_update_cluster_transforms()
+					get_viewport().set_input_as_handled()
+				KEY_R:
+					rotate_object_local(Vector3.RIGHT, -ROTATION_STEP)
+					_update_cluster_transforms()
+					get_viewport().set_input_as_handled()
+				KEY_F:
+					rotate_object_local(Vector3.RIGHT,  ROTATION_STEP)
+					_update_cluster_transforms()
+					get_viewport().set_input_as_handled()
+				KEY_T:
+					rotate_object_local(Vector3.FORWARD, -ROTATION_STEP)
+					_update_cluster_transforms()
+					get_viewport().set_input_as_handled()
+				KEY_G:
+					rotate_object_local(Vector3.FORWARD,  ROTATION_STEP)
+					_update_cluster_transforms()
+					get_viewport().set_input_as_handled()
+
+	# ── Shift + mouse drag: free Y/X rotation ────────────────────────────────
+	if event is InputEventMouseMotion and _shift_held and not _rmb_held:
+		var motion := event as InputEventMouseMotion
+		rotate_object_local(Vector3.UP, deg_to_rad(motion.relative.x * MOUSE_ROT_SENSITIVITY))
+		rotate_object_local(Vector3.RIGHT, deg_to_rad(motion.relative.y * MOUSE_ROT_SENSITIVITY))
+		_update_cluster_transforms()
+		get_viewport().set_input_as_handled()
+
 # ── Public API ───────────────────────────────────────────────────────────────
 func setup(data: ItemData) -> void:
 	item_data = data
@@ -108,10 +159,6 @@ func setup(data: ItemData) -> void:
 			col.shape = box
 	add_child(col)
 
-	# Set mass based on approximate volume for realistic physics
-	var vol: float = data.size.x * data.size.y * data.size.z
-	mass = clampf(vol * 800.0, 0.2, 10.0)  # ~density of wood/plastic
-
 ## Called when spawning a brand-new part from a JunkBox.
 ## Resets rotation to identity so the part starts clean.
 func pick_up() -> void:
@@ -120,6 +167,7 @@ func pick_up() -> void:
 	# Reset orientation for fresh parts
 	global_transform.basis = Basis.IDENTITY
 	_height_offset = 0.0
+	_shift_held = false
 	_rmb_held = false
 	if Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
 		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
@@ -139,6 +187,7 @@ func pick_up_existing() -> void:
 
 	is_held = true
 	is_placed = false
+	_shift_held = false
 	_rmb_held = false
 	if Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
 		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
@@ -176,9 +225,6 @@ func place_at(world_pos: Vector3, pivot: Node3D) -> void:
 func _exit_held_physics() -> void:
 	collision_layer = 2   # back on the parts layer
 	collision_mask  = 3   # collide with table (1) + other parts (2)
-	# Moderate damping for natural settling without sticking
-	linear_damp = 0.8
-	angular_damp = 1.5
 	freeze = false        # let physics take over — gravity, impacts, settling
 
 # ── Mouse-follow ─────────────────────────────────────────────────────────────

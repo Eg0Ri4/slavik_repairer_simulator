@@ -31,9 +31,24 @@ transform = Transform3D(0.992546, 0.014889, -0.120967, 0, 0.992546, 0.121881, 0.
 [node name="CameraController" type="Node3D" parent="." unique_id=2093328528]
 transform = Transform3D(1, 0, 0, 0, 0.707107, 0.707107, 0, -0.707107, 0.707107, 0, 1.4, 1.2)
 script = ExtResource("2_camera")
+table_position = null
+table_rotation_deg = null
+under_table_position = null
+under_table_rotation_deg = null
+menu_position = null
+menu_rotation_deg = null
+gameplay_tween_duration = null
+tween_duration = null
+pivot_sensitivity = null
 
-[node name="Camera3D" type="Camera3D" parent="CameraController" unique_id=1648186827]
-transform = Transform3D(0.42822486, 0.63899267, -0.63899285, -0.63899255, 0.71411234, 0.28588742, 0.63899255, 0.2858876, 0.7141122, -0.60374665, -0.01958403, -0.996981)
+[node name="MenuCamera" type="Camera3D" parent="CameraController" unique_id=1895147347]
+transform = Transform3D(0.9006695, 0.22540972, -0.3714632, -0.30724123, 0.9349047, -0.17763859, 0.30724123, 0.27412248, 0.91129535, -0.73227286, -0.3474198, -0.7686384)
+current = true
+fov = 60.0
+far = 100.0
+
+[node name="GameCamera" type="Camera3D" parent="CameraController" unique_id=1648186827]
+transform = Transform3D(0.42822486, 0.6389926, -0.63899285, -0.6389926, 0.7141123, 0.28588736, 0.6389926, 0.2858876, 0.71411216, -0.60374546, -0.01958403, -0.99698126)
 fov = 60.0
 far = 100.0
 

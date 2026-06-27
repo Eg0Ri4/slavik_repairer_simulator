@@ -1,37 +1,33 @@
-## GameState - Autoload singleton for global game state
+## GameState.gd — Autoload singleton
 extends Node
 
-## Current tool: "hand", "tape", or "nail"
-var active_tool: String = "hand"
+# ── Game Phase ────────────────────────────────────────────────────────────────
+enum GamePhase { MENU, PLAYING }
+var current_phase: GamePhase = GamePhase.MENU
 
-## The part currently being held/dragged
-var held_part: RigidBody3D = null
+func is_playing() -> bool:
+	return current_phase == GamePhase.PLAYING
 
-## Camera state
-var camera_state: String = "TABLE_VIEW"  # or "UNDER_TABLE_VIEW"
+func set_phase(phase: GamePhase) -> void:
+	current_phase = phase
+	phase_changed.emit(phase)
 
-## All parts attached to the assembly
+# ── Gameplay state ────────────────────────────────────────────────────────────
+var active_tool:    String     = "tape"
+var held_part:      RigidBody3D = null
+var camera_state:   String     = "TABLE_VIEW"
 var assembly_parts: Array[Node3D] = []
+var current_order:  OrderData  = null
 
-## Current order being worked on
-var current_order: OrderData = null
-
-# ── Compound Cluster State ───────────────────────────────────────────────────
-## Secondary parts in the cluster (excludes the primary held_part).
-var held_cluster: Array[JunkPart] = []
-## Transform offset of each cluster member relative to the primary part at pick-up time.
-## Keyed by the JunkPart instance (object identity).
-var cluster_offsets: Dictionary = {}   # JunkPart → Transform3D
-## Joints connecting cluster members — disabled during movement, re-enabled on drop.
-var cluster_joints: Array[Joint3D] = []
-
-## Signals
+# ── Signals ───────────────────────────────────────────────────────────────────
+signal phase_changed(new_phase: GamePhase)
 signal tool_changed(new_tool: String)
 signal part_picked_up(part: RigidBody3D)
 signal part_placed()
 signal camera_state_changed(new_state: String)
 signal nail_event(event_name: String, data: Variant)
 
+# ── Methods ───────────────────────────────────────────────────────────────────
 func set_active_tool(tool_name: String) -> void:
 	active_tool = tool_name
 	tool_changed.emit(tool_name)
@@ -43,26 +39,6 @@ func pick_up_part(part: RigidBody3D) -> void:
 func place_part() -> void:
 	held_part = null
 	part_placed.emit()
-
-## Store the cluster (secondary parts + joints) for compound movement.
-## `primary` is the part the player clicked — it's stored in held_part separately.
-## `secondary_parts` are the other connected parts (excluding primary).
-## `joints` are the Joint3D nodes connecting cluster members.
-func pick_up_cluster(primary: JunkPart, secondary_parts: Array[JunkPart], joints: Array[Joint3D]) -> void:
-	held_cluster = secondary_parts
-	cluster_joints = joints
-	cluster_offsets.clear()
-
-	var primary_inv: Transform3D = primary.global_transform.affine_inverse()
-	for part: JunkPart in secondary_parts:
-		# Store each part's transform relative to the primary
-		cluster_offsets[part] = primary_inv * part.global_transform
-
-## Clear all cluster state. Called when the assembly is dropped.
-func drop_cluster() -> void:
-	held_cluster.clear()
-	cluster_offsets.clear()
-	cluster_joints.clear()
 
 func set_camera_state(new_state: String) -> void:
 	camera_state = new_state
