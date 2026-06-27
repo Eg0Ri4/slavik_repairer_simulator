@@ -17,19 +17,26 @@ var _mesh_node: Node3D = null
 var _follow_plane_y: float = 0.07   # height of table surface in world space
 
 # ── Rotation state ───────────────────────────────────────────────────────────
-## Accumulated rotation offset applied by the player (in degrees).
-var _rotation_offset := Vector3.ZERO
-## Rotation step for keyboard inputs (degrees).
-const ROTATION_STEP_DEG: float = 15.0
-## Mouse rotation sensitivity (degrees per pixel of mouse movement).
+## Accumulated rotation stored as a Basis to avoid gimbal lock.
+var _rotation_basis := Basis.IDENTITY
+
+## Rotation step for keyboard inputs (radians).
+const ROTATION_STEP: float = deg_to_rad(15.0)
+
+## Mouse rotation sensitivity for Shift+drag (degrees per pixel).
 const MOUSE_ROT_SENSITIVITY: float = 0.4
-## Whether the Shift key is currently held (for mouse rotation mode).
+
+## Mouse rotation sensitivity for RMB Skyrim-style inspect (radians per pixel).
+const RMB_ROT_SPEED: float = 0.005
+
+## Whether the Shift key is currently held (for legacy Shift+drag mouse rotation mode).
 var _shift_held: bool = false
-var _last_mouse_pos: Vector2 = Vector2.ZERO
+
+## Whether RMB is currently held for Skyrim-style item inspection rotation.
+var _rmb_held: bool = false
 
 # ── Lifecycle ────────────────────────────────────────────────────────────────
 func _ready() -> void:
-	# Freeze physics while held
 	freeze = true
 	collision_layer = 2
 	collision_mask = 3   # table + parts (1 + 2 = 3)
@@ -42,40 +49,60 @@ func _unhandled_input(event: InputEvent) -> void:
 	if not is_held:
 		return
 
-	# Track Shift state for mouse rotation mode and handle keyboard rotation keys
+	# ── RMB: Skyrim-style inspect rotation ───────────────────────────────────
+	if event is InputEventMouseButton:
+		if event.button_index == MOUSE_BUTTON_RIGHT:
+			_rmb_held = event.pressed
+			if _rmb_held:
+				Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+			else:
+				Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+			get_viewport().set_input_as_handled()
+			return
+
+	if event is InputEventMouseMotion and _rmb_held:
+		var motion := event as InputEventMouseMotion
+		var yaw   := Basis(Vector3.UP,    -motion.relative.x * RMB_ROT_SPEED)
+		var pitch := Basis(Vector3.RIGHT, -motion.relative.y * RMB_ROT_SPEED)
+		_rotation_basis = yaw * _rotation_basis * pitch
+		get_viewport().set_input_as_handled()
+		return
+
+	# ── Shift key tracking ───────────────────────────────────────────────────
 	if event is InputEventKey:
 		if event.keycode == KEY_SHIFT:
 			if event.pressed and not event.is_echo():
 				_shift_held = true
-				_last_mouse_pos = get_viewport().get_mouse_position()
 			elif not event.pressed:
 				_shift_held = false
+
 		elif event.pressed and not event.is_echo():
 			match event.keycode:
 				KEY_Q:
-					_rotation_offset.y -= ROTATION_STEP_DEG
+					_rotation_basis = Basis(Vector3.UP, -ROTATION_STEP) * _rotation_basis
 					get_viewport().set_input_as_handled()
 				KEY_E:
-					_rotation_offset.y += ROTATION_STEP_DEG
+					_rotation_basis = Basis(Vector3.UP,  ROTATION_STEP) * _rotation_basis
 					get_viewport().set_input_as_handled()
 				KEY_R:
-					_rotation_offset.x -= ROTATION_STEP_DEG
+					_rotation_basis = _rotation_basis * Basis(Vector3.RIGHT, -ROTATION_STEP)
 					get_viewport().set_input_as_handled()
 				KEY_F:
-					_rotation_offset.x += ROTATION_STEP_DEG
+					_rotation_basis = _rotation_basis * Basis(Vector3.RIGHT,  ROTATION_STEP)
 					get_viewport().set_input_as_handled()
 				KEY_T:
-					_rotation_offset.z -= ROTATION_STEP_DEG
+					_rotation_basis = _rotation_basis * Basis(Vector3.FORWARD, -ROTATION_STEP)
 					get_viewport().set_input_as_handled()
 				KEY_G:
-					_rotation_offset.z += ROTATION_STEP_DEG
+					_rotation_basis = _rotation_basis * Basis(Vector3.FORWARD,  ROTATION_STEP)
 					get_viewport().set_input_as_handled()
 
-	# Shift + mouse drag → free rotation on Y (horizontal) and X (vertical)
-	if event is InputEventMouseMotion and _shift_held:
+	# ── Shift + mouse drag: free Y/X rotation ────────────────────────────────
+	if event is InputEventMouseMotion and _shift_held and not _rmb_held:
 		var motion := event as InputEventMouseMotion
-		_rotation_offset.y += motion.relative.x * MOUSE_ROT_SENSITIVITY
-		_rotation_offset.x += motion.relative.y * MOUSE_ROT_SENSITIVITY
+		var yaw   := Basis(Vector3.UP,    deg_to_rad( motion.relative.x * MOUSE_ROT_SENSITIVITY))
+		var pitch := Basis(Vector3.RIGHT, deg_to_rad( motion.relative.y * MOUSE_ROT_SENSITIVITY))
+		_rotation_basis = yaw * _rotation_basis * pitch
 		get_viewport().set_input_as_handled()
 
 # ── Public API ───────────────────────────────────────────────────────────────
@@ -83,11 +110,9 @@ func setup(data: ItemData) -> void:
 	item_data = data
 	tags = data.tags.duplicate()
 
-	# Build a simple CSG visual
 	_mesh_node = _build_mesh(data)
 	add_child(_mesh_node)
 
-	# Collision shape matching shape_type
 	var col: CollisionShape3D = CollisionShape3D.new()
 	match data.shape_type:
 		"cylinder":
@@ -105,35 +130,71 @@ func setup(data: ItemData) -> void:
 			col.shape = box
 	add_child(col)
 
+## Called when spawning a brand-new part from a JunkBox.
+## Resets rotation to identity so the part starts clean.
 func pick_up() -> void:
 	is_held = true
 	is_placed = false
 	freeze = true
-	# Reset rotation offset on pick-up
-	_rotation_offset = Vector3.ZERO
+	_rotation_basis = Basis.IDENTITY
 	_shift_held = false
-	# Disable collisions while dragging so it doesn't block raycasts
+	_rmb_held = false
+	if Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
+		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+	collision_layer = 0
+	collision_mask = 0
+
+## Called when picking up an existing loose part already in the scene.
+## Preserves the part's current orientation so it doesn't snap to a
+## different angle the moment the player grabs it.
+func pick_up_existing() -> void:
+	# Capture current world rotation into _rotation_basis before any state change,
+	# so _follow_mouse() will apply it unchanged on the first frame.
+	_rotation_basis = global_transform.basis.orthonormalized()
+
+	# De-parent from AssemblyPivot (or wherever it lives) back to the scene root,
+	# preserving world position so the object doesn't teleport.
+	var scene_root := get_tree().root.get_node_or_null("Main")
+	if scene_root and get_parent() != scene_root:
+		reparent(scene_root, true)
+
+	is_held = true
+	is_placed = false
+	freeze = true
+	_shift_held = false
+	_rmb_held = false
+	if Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
+		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+	# Disable collisions while dragging so raycasts pass through
 	collision_layer = 0
 	collision_mask = 0
 
 func place_at(world_pos: Vector3, pivot: Node3D) -> void:
 	is_held = false
 	is_placed = true
+
+	if _rmb_held:
+		_rmb_held = false
+		if Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
+			Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+
 	global_position = world_pos
 
-	# Re-parent to the assembly pivot (reparent preserves global_transform)
 	if get_parent() != pivot:
 		reparent(pivot, true)
 
-	# Restore physics but in frozen mode (joint will handle it)
 	freeze = true
 	collision_layer = 2
-	collision_mask = 3   # table + parts (1 + 2 = 3)
+	collision_mask = 3
 
 	GameState.register_assembly_part(self)
 
 # ── Mouse-follow ─────────────────────────────────────────────────────────────
 func _follow_mouse() -> void:
+	if _rmb_held:
+		transform.basis = _rotation_basis
+		return
+
 	var viewport: Viewport = get_viewport()
 	if viewport == null:
 		return
@@ -141,7 +202,6 @@ func _follow_mouse() -> void:
 	if camera == null:
 		return
 
-	# Calculate current table surface height dynamically
 	var follow_y := _follow_plane_y
 	var main_node = get_tree().root.get_node_or_null("Main")
 	if main_node:
@@ -154,19 +214,15 @@ func _follow_mouse() -> void:
 
 	var mouse_pos: Vector2 = viewport.get_mouse_position()
 
-	# Project using target table view camera transform if it exists, so the dragging
-	# feels immediately and already on the table, without sliding around during transition.
 	var saved_transform := camera.global_transform
 	var using_target := false
 	if main_node:
 		var tv_target = main_node.get_node_or_null("TableViewTarget")
 		if tv_target:
-			# Target Camera3D transform is tv_target.global_transform * camera.transform
 			var target_camera_global = tv_target.global_transform * camera.transform
 			camera.global_transform = target_camera_global
 			using_target = true
 
-	# Project mouse onto the horizontal plane at follow_y
 	var origin: Vector3 = camera.project_ray_origin(mouse_pos)
 	var direction: Vector3 = camera.project_ray_normal(mouse_pos)
 
@@ -178,14 +234,12 @@ func _follow_mouse() -> void:
 
 	var t: float = (follow_y - origin.y) / direction.y
 	var target: Vector3 = origin + direction * t
-	# Small hover above surface
 	target.y = follow_y + 0.05
 	global_position = target
 
-	# Apply accumulated rotation
-	rotation_degrees = _rotation_offset
+	transform.basis = _rotation_basis
 
-# ── Mesh builder (CSG-like using MeshInstance3D) ─────────────────────────────
+# ── Mesh builder ─────────────────────────────────────────────────────────────
 func _build_mesh(data: ItemData) -> MeshInstance3D:
 	var mi := MeshInstance3D.new()
 

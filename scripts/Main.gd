@@ -37,13 +37,11 @@ var _table_y: float = 0.3
 
 # ── Lifecycle ────────────────────────────────────────────────────────────────
 func _ready() -> void:
-	# Reference existing nodes in the scene
 	camera_controller = $CameraController
 	assembly_pivot = $AssemblyPivot
 	table = get_node_or_null("GarageAndTable")
 	boxes = [$BoxA, $BoxB, $BoxC]
 
-	# Align AssemblyPivot Y position with the table top surface dynamically
 	var table_static = get_node_or_null("TableStaticBody")
 	if table_static:
 		var col_shape = table_static.get_node_or_null("CollisionShape3D")
@@ -53,13 +51,10 @@ func _ready() -> void:
 			if assembly_pivot:
 				assembly_pivot.global_position.y = _table_y
 
-
-
 	_build_systems()
 	_build_ui()
 	_setup_order()
 
-	# Connect GameState signals
 	GameState.camera_state_changed.connect(_on_camera_state_changed)
 	GameState.part_picked_up.connect(_on_part_picked_up)
 	GameState.part_placed.connect(_on_part_placed)
@@ -73,13 +68,11 @@ func _build_systems() -> void:
 	evaluation_system.name = "EvaluationSystem"
 	add_child(evaluation_system)
 
-	# Nail tool
 	nail_tool = NailTool.new()
 	nail_tool.name = "NailTool"
 	nail_tool.assembly_pivot = assembly_pivot
 	add_child(nail_tool)
 
-	# Connect nail tool signals for UI feedback
 	nail_tool.nail_placed.connect(_on_nail_placed)
 	nail_tool.nail_strike_performed.connect(_on_nail_strike)
 	nail_tool.nail_fully_driven.connect(_on_nail_driven)
@@ -90,7 +83,7 @@ func _build_ui() -> void:
 	ui_layer.name = "UI"
 	add_child(ui_layer)
 
-	# ── Order Panel (using VBoxContainer to prevent overlap) ─────────────────
+	# ── Order Panel ───────────────────────────────────────────────────────────
 	var panel := _make_panel(Vector2(10, 10), Vector2(320, 215))
 	ui_layer.add_child(panel)
 
@@ -100,7 +93,6 @@ func _build_ui() -> void:
 	vbox.add_theme_constant_override("separation", 6)
 	panel.add_child(vbox)
 
-	# Order title
 	var order_title := Label.new()
 	order_title.name = "OrderTitle"
 	order_title.text = "📋 REPAIR ORDER"
@@ -115,7 +107,6 @@ func _build_ui() -> void:
 	order_desc_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	vbox.add_child(order_desc_label)
 
-	# Held part indicator
 	part_name_label = Label.new()
 	part_name_label.name = "PartName"
 	part_name_label.text = "Holding: nothing"
@@ -123,15 +114,14 @@ func _build_ui() -> void:
 	part_name_label.add_theme_font_size_override("font_size", 14)
 	vbox.add_child(part_name_label)
 
-	# Instructions
 	instructions_label = Label.new()
 	instructions_label.name = "Instructions"
-	instructions_label.text = "RMB drag: rotate assembly\nClick box: grab part\nLMB: place part\nQ/E R/F T/G: rotate held part\nShift+drag: free rotate held part"
+	instructions_label.text = "Hold RMB: inspect-rotate part (Skyrim)\nNo part + RMB drag: orbit assembly\nLMB part on table: pick it back up\nClick box: grab part  ·  LMB: place\nQ/E: yaw  R/F: pitch  T/G: roll\nShift+drag: free-rotate held part"
 	instructions_label.add_theme_color_override("font_color", Color(0.75, 0.75, 0.75))
 	instructions_label.add_theme_font_size_override("font_size", 11)
 	vbox.add_child(instructions_label)
 
-	# ── Tool selector (using VBox & HBox layout) ─────────────────────────────
+	# ── Tool selector ─────────────────────────────────────────────────────────
 	var tool_panel := _make_panel(Vector2(10, 235), Vector2(320, 115))
 	ui_layer.add_child(tool_panel)
 
@@ -159,7 +149,6 @@ func _build_ui() -> void:
 	tool_nail_btn.pressed.connect(_on_nail_pressed)
 	tool_hbox.add_child(tool_nail_btn)
 
-	# Nail status label (shows hammering progress)
 	nail_status_label = Label.new()
 	nail_status_label.name = "NailStatus"
 	nail_status_label.text = ""
@@ -169,19 +158,19 @@ func _build_ui() -> void:
 
 	_update_tool_buttons()
 
-	# ── View toggle ──────────────────────────────────────────────────────────
+	# ── View toggle ───────────────────────────────────────────────────────────
 	view_toggle_btn = _make_button("🔽 LOOK UNDER TABLE (Tab)", Vector2(10, 330), Vector2(320, 40))
 	view_toggle_btn.pressed.connect(_on_view_toggle_pressed)
 	ui_layer.add_child(view_toggle_btn)
 
-	# ── TRUST ME button ──────────────────────────────────────────────────────
+	# ── TRUST ME button ───────────────────────────────────────────────────────
 	trust_me_btn = _make_button("⚡ TRUST ME, I'M AN ENGINEER ⚡", Vector2(10, 380), Vector2(320, 50))
 	trust_me_btn.add_theme_font_size_override("font_size", 15)
 	trust_me_btn.add_theme_color_override("font_color", Color(1, 1, 0))
 	trust_me_btn.pressed.connect(_on_trust_me_pressed)
 	ui_layer.add_child(trust_me_btn)
 
-	# ── Result display (using vertical layout) ───────────────────────────────
+	# ── Result display ────────────────────────────────────────────────────────
 	var result_panel := _make_panel(Vector2(10, 440), Vector2(320, 135))
 	result_panel.name = "ResultPanel"
 	ui_layer.add_child(result_panel)
@@ -198,7 +187,7 @@ func _build_ui() -> void:
 	result_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	result_vbox.add_child(result_label)
 
-	# ── Reset button ─────────────────────────────────────────────────────────
+	# ── Reset button ──────────────────────────────────────────────────────────
 	var reset_btn := _make_button("🗑 CLEAR ASSEMBLY", Vector2(10, 585), Vector2(320, 36))
 	reset_btn.pressed.connect(_on_reset_pressed)
 	ui_layer.add_child(reset_btn)
@@ -219,61 +208,119 @@ func _setup_order() -> void:
 	if order_desc_label:
 		order_desc_label.text = _order.description
 
-# ── Input handling ───────────────────────────────────────────────────────────
+# ── Input handling ────────────────────────────────────────────────────────────
 func _input(event: InputEvent) -> void:
-	# Tab key toggles view
 	if event is InputEventKey and event.pressed and not event.is_echo():
 		if event.keycode == KEY_TAB:
 			_on_view_toggle_pressed()
 
-	# Mouse click
 	if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
 		_handle_left_click(event.position)
 
 func _handle_left_click(mouse_pos: Vector2) -> void:
 	match GameState.camera_state:
 		"UNDER_TABLE_VIEW":
-			# Try to click a box
 			var box := _raycast_for_box(mouse_pos)
 			if box:
 				_extract_from_box(box)
 
 		"TABLE_VIEW":
-			# If holding a part, place it
 			if GameState.held_part != null:
+				# Already holding something — place it
 				_place_held_part(mouse_pos)
 			else:
-				# Check nail tool first
+				# ── Priority 1: nail tool intercept ──────────────────────────
 				if GameState.active_tool == "nail" and nail_tool.handle_click(mouse_pos):
 					return
-				# Try to click a box to grab a part directly
+
+				# ── Priority 2: pick up an existing loose JunkPart ───────────
+				var existing := _raycast_for_part(mouse_pos)
+				if existing:
+					_pick_up_existing_part(existing)
+					return
+
+				# ── Priority 3: grab a new part from a JunkBox ───────────────
 				var box := _raycast_for_box(mouse_pos)
 				if box:
 					_extract_from_box(box)
+
+# ── Raycast helpers ───────────────────────────────────────────────────────────
+
+## Raycast against placed/loose JunkParts (collision layer 2).
+## Returns the JunkPart if it is not already held and has no active joint
+## connecting it to another body (i.e. it is truly loose / re-grabbable).
+func _raycast_for_part(mouse_pos: Vector2) -> JunkPart:
+	var cam := get_viewport().get_camera_3d()
+	if cam == null:
+		return null
+
+	var origin    := cam.project_ray_origin(mouse_pos)
+	var direction := cam.project_ray_normal(mouse_pos)
+
+	var space := get_world_3d().direct_space_state
+	var query := PhysicsRayQueryParameters3D.create(origin, origin + direction * 20.0)
+	query.collision_mask = 2   # layer 2 = JunkPart objects
+	var result := space.intersect_ray(query)
+
+	if not result:
+		return null
+
+	var collider = result.collider
+	if not (collider is JunkPart):
+		return null
+
+	var part := collider as JunkPart
+
+	# Don't re-grab something already in the air
+	if part.is_held:
+		return null
+
+	# Don't grab a part that is fastened via a joint — it's part of a rigid assembly.
+	# We check by scanning the part's children for any Joint3D node added by AttachmentSystem.
+	for child in part.get_children():
+		if child is Joint3D:
+			return null
+
+	return part
 
 func _raycast_for_box(mouse_pos: Vector2) -> JunkBox:
 	var cam := get_viewport().get_camera_3d()
 	if cam == null:
 		return null
 
-	var origin := cam.project_ray_origin(mouse_pos)
+	var origin    := cam.project_ray_origin(mouse_pos)
 	var direction := cam.project_ray_normal(mouse_pos)
 
 	var space := get_world_3d().direct_space_state
 	var query := PhysicsRayQueryParameters3D.create(origin, origin + direction * 20.0)
-	query.collision_mask = 4  # box layer
+	query.collision_mask = 4   # box layer
 	var result := space.intersect_ray(query)
 
 	if result and result.collider is JunkBox:
 		return result.collider as JunkBox
 	return null
 
+# ── Pick-up helpers ───────────────────────────────────────────────────────────
+
+## Pick up a JunkPart that is already sitting in the scene (placed or loose).
+## Removes it from the assembly registry and any pivot parenting so it can be
+## freely repositioned and re-placed like a freshly spawned part.
+func _pick_up_existing_part(part: JunkPart) -> void:
+	# Remove from GameState assembly list so evaluation ignores it while held
+	GameState.assembly_parts.erase(part)
+
+	# Let the part handle its own physics/collision state transition,
+	# preserving its current world orientation.
+	part.pick_up_existing()
+
+	# Register as the currently held part and fire the part_picked_up signal
+	GameState.pick_up_part(part)
+
 func _extract_from_box(box: JunkBox) -> void:
 	var item_data := box.extract_random_part()
 	if item_data == null:
 		return
 
-	# Spawn part on the table surface directly above the box
 	var part := JunkPart.new()
 	part.setup(item_data)
 	add_child(part)
@@ -283,7 +330,6 @@ func _extract_from_box(box: JunkBox) -> void:
 	part.pick_up()
 	GameState.pick_up_part(part)
 
-	# Transition camera back to table
 	var cc := get_node_or_null("CameraController") as Node3D
 	if cc and cc.has_method("go_to_table_view"):
 		cc.go_to_table_view()
@@ -293,12 +339,10 @@ func _place_held_part(mouse_pos: Vector2) -> void:
 	if part == null:
 		return
 
-	# Raycast against the table or existing parts
 	var cam := get_viewport().get_camera_3d()
 	if cam == null:
 		return
 
-	# If camera is transitioning, project using target table view camera transform for consistency
 	var saved_transform := cam.global_transform
 	var using_target := false
 	var tv_target = get_node_or_null("TableViewTarget")
@@ -307,7 +351,7 @@ func _place_held_part(mouse_pos: Vector2) -> void:
 		cam.global_transform = target_camera_global
 		using_target = true
 
-	var origin := cam.project_ray_origin(mouse_pos)
+	var origin    := cam.project_ray_origin(mouse_pos)
 	var direction := cam.project_ray_normal(mouse_pos)
 
 	if using_target:
@@ -315,25 +359,23 @@ func _place_held_part(mouse_pos: Vector2) -> void:
 
 	var table_y := _table_y
 	var drop_pos := Vector3.ZERO
-	var hit_y := table_y
+	var hit_y    := table_y
 
 	var space := get_world_3d().direct_space_state
 	var query := PhysicsRayQueryParameters3D.create(origin, origin + direction * 20.0)
-	query.collision_mask = 3   # table layer (1) + placed parts layer (2)
+	query.collision_mask = 3   # table (1) + placed parts (2)
 	var result := space.intersect_ray(query)
 
 	if result:
 		drop_pos = result.position
-		hit_y = result.position.y
+		hit_y    = result.position.y
 	else:
-		# Fallback: intersect horizontal plane
 		if abs(direction.y) > 0.001:
 			var t := (table_y - origin.y) / direction.y
 			if t > 0:
 				drop_pos = origin + direction * t
 		hit_y = table_y
 
-	# Place on top of the actual hit surface height
 	drop_pos.y = hit_y + (part.item_data.size.y * 0.5 if part.item_data else 0.1)
 
 	part.place_at(drop_pos, assembly_pivot)
@@ -347,10 +389,8 @@ func _attach_part(part: JunkPart) -> void:
 			placed_count += 1
 
 	if placed_count == 0:
-		# First piece — just sits on the pivot, no joint needed
 		return
 
-	# Attach to the nearest sibling
 	attachment_system.attach(part, assembly_pivot)
 
 # ── Mouse hover for boxes ─────────────────────────────────────────────────────
@@ -369,10 +409,10 @@ func _update_box_hover() -> void:
 			new_hovered.highlight(true)
 		_hovered_box = new_hovered
 
-# ── UI callbacks ─────────────────────────────────────────────────────────────
+# ── UI callbacks ──────────────────────────────────────────────────────────────
 func _on_view_toggle_pressed() -> void:
 	if GameState.held_part != null:
-		return  # Don't go under table while holding something
+		return
 
 	var cc := get_node_or_null("CameraController")
 	if cc and cc.has_method("toggle_view"):
@@ -389,13 +429,12 @@ func _on_nail_pressed() -> void:
 func _update_tool_buttons() -> void:
 	if tool_tape_btn == null or tool_nail_btn == null:
 		return
-	var active := GameState.active_tool
-	var active_color := Color(1.0, 0.9, 0.3)
+	var active        := GameState.active_tool
+	var active_color  := Color(1.0, 0.9, 0.3)
 	var inactive_color := Color(0.75, 0.75, 0.75)
-	tool_tape_btn.modulate  = active_color if active == "tape"  else inactive_color
-	tool_nail_btn.modulate  = active_color if active == "nail"  else inactive_color
+	tool_tape_btn.modulate = active_color if active == "tape" else inactive_color
+	tool_nail_btn.modulate = active_color if active == "nail" else inactive_color
 
-	# Update nail status label
 	if nail_status_label:
 		if active == "nail":
 			nail_status_label.text = "Click on a part to place nail, then click nail to hammer"
@@ -403,12 +442,9 @@ func _update_tool_buttons() -> void:
 			nail_status_label.text = ""
 
 func _on_trust_me_pressed() -> void:
-	if _order == null:
-		return
-	if result_label == null:
+	if _order == null or result_label == null:
 		return
 
-	# Count placed parts
 	var placed_count: int = 0
 	for child in assembly_pivot.get_children():
 		if child is JunkPart:
@@ -419,18 +455,18 @@ func _on_trust_me_pressed() -> void:
 		return
 
 	var eval_result := evaluation_system.evaluate(assembly_pivot, _order)
-	var pct: int = eval_result["percentage"]
+	var pct: int    = eval_result["percentage"]
 	var grade: String = evaluation_system.grade_label(pct)
-	var score: int = eval_result["total_score"]
-	var max_s: int = eval_result["max_score"]
+	var score: int  = eval_result["total_score"]
+	var max_s: int  = eval_result["max_score"]
 
 	var detail: String = ""
 	for req in eval_result["requirements"]:
-		var tag: String = req["tag"]
-		var earned: int = req["points_earned"]
-		var possible: int = req["points_possible"]
-		var found: bool = req["found"]
-		var icon: String = "✅" if earned == possible else ("⚠️" if earned > 0 else "❌")
+		var tag: String    = req["tag"]
+		var earned: int    = req["points_earned"]
+		var possible: int  = req["points_possible"]
+		var found: bool    = req["found"]
+		var icon: String   = "✅" if earned == possible else ("⚠️" if earned > 0 else "❌")
 		if not found:
 			detail += "%s [%s]: Not found (0/%d pts)\n" % [icon, tag, possible]
 		else:
@@ -442,12 +478,10 @@ func _on_trust_me_pressed() -> void:
 	]
 
 func _on_reset_pressed() -> void:
-	# Remove all placed parts and joints from assembly pivot
 	for child in assembly_pivot.get_children():
 		if child is JunkPart or child is Joint3D or child is Nail:
 			child.queue_free()
 
-	# Also remove any held part
 	if GameState.held_part:
 		GameState.held_part.queue_free()
 		GameState.place_part()
@@ -456,7 +490,6 @@ func _on_reset_pressed() -> void:
 
 	if result_label:
 		result_label.text = "Assembly cleared. Grab some parts from the boxes!"
-
 	if part_name_label:
 		part_name_label.text = "Holding: nothing"
 
