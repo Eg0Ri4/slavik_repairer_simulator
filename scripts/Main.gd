@@ -303,6 +303,12 @@ func _pick_up_existing_part(part: JunkPart) -> void:
 	# ── Step 1: Discover the full connected cluster ─────────────────────
 	var cluster: Array[JunkPart] = attachment_system.get_connected_cluster(part, assembly_pivot)
 
+	# ── Check if any part in the cluster is attached to the base ────────
+	if _is_cluster_attached_to_base(cluster):
+		if part_name_label:
+			part_name_label.text = "Cannot pick up: Attached to base"
+		return
+
 	# Build secondary list (everything except the primary clicked part)
 	var secondary: Array[JunkPart] = []
 	for p: JunkPart in cluster:
@@ -331,10 +337,10 @@ func _pick_up_existing_part(part: JunkPart) -> void:
 		if p.get_parent() != self:
 			p.reparent(self, true)
 
-		# Freeze physics and disable collisions
+		# Disable collisions and freeze — ghost mode during drag
 		p.freeze = true
 		p.collision_layer = 0
-		p.collision_mask = 0
+		p.collision_mask  = 0
 		p.is_held = false  # only primary is "held" — secondary are passengers
 		p.is_placed = false
 
@@ -357,6 +363,26 @@ func _pick_up_existing_part(part: JunkPart) -> void:
 	# ── Step 7: Register cluster state in GameState ─────────────────────
 	GameState.pick_up_cluster(part, secondary, joints)
 	GameState.pick_up_part(part)
+
+func _is_cluster_attached_to_base(cluster: Array[JunkPart]) -> bool:
+	var cluster_rids := {}
+	for p in cluster:
+		cluster_rids[p.get_rid()] = true
+		
+	for child in assembly_pivot.get_children():
+		if child is Joint3D:
+			var joint := child as Joint3D
+			var body_a = joint.get_node_or_null(joint.node_a) if joint.node_a else null
+			var body_b = joint.get_node_or_null(joint.node_b) if joint.node_b else null
+			
+			var a_in_cluster = body_a is JunkPart and body_a.get_rid() in cluster_rids
+			var b_in_cluster = body_b is JunkPart and body_b.get_rid() in cluster_rids
+			var a_is_static = body_a is StaticBody3D
+			var b_is_static = body_b is StaticBody3D
+			
+			if (a_in_cluster and b_is_static) or (b_in_cluster and a_is_static):
+				return true
+	return false
 
 func _extract_from_box(box: JunkBox) -> void:
 	var item_data := box.extract_random_part()
@@ -437,13 +463,13 @@ func _place_held_part(mouse_pos: Vector2) -> void:
 		if p.get_parent() != assembly_pivot:
 			p.reparent(assembly_pivot, true)
 
-		# Restore placement state
+		# Restore placement state with full physics re-enable
 		p.global_transform = world_xform
 		p.is_held = false
 		p.is_placed = true
-		p.freeze = true
 		p.collision_layer = 2
 		p.collision_mask = 3
+		p.freeze = false   # let physics take over — settle naturally
 
 		GameState.register_assembly_part(p)
 
@@ -473,8 +499,8 @@ func _place_held_part(mouse_pos: Vector2) -> void:
 			return a.global_position.distance_to(j_pos) < b.global_position.distance_to(j_pos)
 		)
 		if sorted_by_dist.size() >= 2:
-			joint.node_a = joint.get_path_to(sorted_by_dist[0])
-			joint.node_b = joint.get_path_to(sorted_by_dist[1])
+			# Use call_deferred for node path assignment so physics settles first
+			_deferred_assign_joint_paths(joint, sorted_by_dist[0], sorted_by_dist[1])
 
 	# ── Clean up cluster state ───────────────────────────────────────────
 	GameState.drop_cluster()
@@ -482,6 +508,23 @@ func _place_held_part(mouse_pos: Vector2) -> void:
 	# ── Attach primary if other parts exist (for solo parts without cluster) ──
 	_attach_part(part)
 	GameState.place_part()
+
+
+## Deferred joint path assignment — ensures nodes are settled in the tree
+## before we call get_path_to, preventing "!is_inside_tree()" errors.
+func _deferred_assign_joint_paths(joint: Joint3D, body_a: Node3D, body_b: Node3D) -> void:
+	if not is_instance_valid(joint):
+		return
+	if not is_instance_valid(body_a) or not is_instance_valid(body_b):
+		return
+	_do_assign_joint_paths.call_deferred(joint, body_a, body_b)
+
+func _do_assign_joint_paths(joint: Joint3D, body_a: Node3D, body_b: Node3D) -> void:
+	if is_instance_valid(joint) and is_instance_valid(body_a) and is_instance_valid(body_b):
+		if joint.is_inside_tree() and body_a.is_inside_tree() and body_b.is_inside_tree():
+			joint.node_a = joint.get_path_to(body_a)
+			joint.node_b = joint.get_path_to(body_b)
+
 
 func _attach_part(part: JunkPart) -> void:
 	var placed_count: int = 0

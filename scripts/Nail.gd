@@ -128,8 +128,13 @@ func _create_joint() -> void:
 	if common_parent:
 		common_parent.add_child(joint)
 		joint.global_position = global_position
-		joint.node_a = joint.get_path_to(_surface_body)
-		joint.node_b = joint.get_path_to(_top_body)
+		_do_assign_joint_paths.call_deferred(joint, _surface_body, _top_body)
+
+func _do_assign_joint_paths(joint: Joint3D, body_a: Node3D, body_b: Node3D) -> void:
+	if is_instance_valid(joint) and is_instance_valid(body_a) and is_instance_valid(body_b):
+		if joint.is_inside_tree() and body_a.is_inside_tree() and body_b.is_inside_tree():
+			joint.node_a = joint.get_path_to(body_a)
+			joint.node_b = joint.get_path_to(body_b)
 
 
 # ── Queries ──────────────────────────────────────────────────────────────────

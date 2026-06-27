@@ -16,10 +16,16 @@ var _mesh_node: Node3D = null
 # ── Placement state ──────────────────────────────────────────────────────────
 var _follow_plane_y: float = 0.07   # height of table surface in world space
 
-# ── Rotation state ───────────────────────────────────────────────────────────
-## Accumulated rotation stored as a Basis to avoid gimbal lock.
-var _rotation_basis := Basis.IDENTITY
+# ── Scroll-height state ──────────────────────────────────────────────────────
+## Accumulated height offset from scroll wheel (added to the Y-axis position).
+var _height_offset: float = 0.0
 
+## How much each scroll tick raises/lowers the object (meters).
+const SCROLL_HEIGHT_STEP: float = 0.05
+## Maximum height above the table surface.
+const SCROLL_HEIGHT_MAX: float = 1.5
+
+# ── Rotation state ───────────────────────────────────────────────────────────
 ## Rotation step for keyboard inputs (radians).
 const ROTATION_STEP: float = deg_to_rad(15.0)
 
@@ -49,8 +55,9 @@ func _unhandled_input(event: InputEvent) -> void:
 	if not is_held:
 		return
 
-	# ── RMB: Skyrim-style inspect rotation ───────────────────────────────────
+	# ── Mouse button events ──────────────────────────────────────────────────
 	if event is InputEventMouseButton:
+		# RMB: Skyrim-style inspect rotation toggle
 		if event.button_index == MOUSE_BUTTON_RIGHT:
 			_rmb_held = event.pressed
 			if _rmb_held:
@@ -60,57 +67,70 @@ func _unhandled_input(event: InputEvent) -> void:
 			get_viewport().set_input_as_handled()
 			return
 
+		# Scroll wheel: raise/lower object along Y-axis
+		if event.button_index == MOUSE_BUTTON_WHEEL_UP and event.pressed:
+			_height_offset = clampf(_height_offset + SCROLL_HEIGHT_STEP, 0.0, SCROLL_HEIGHT_MAX)
+			get_viewport().set_input_as_handled()
+			return
+		if event.button_index == MOUSE_BUTTON_WHEEL_DOWN and event.pressed:
+			_height_offset = clampf(_height_offset - SCROLL_HEIGHT_STEP, 0.0, SCROLL_HEIGHT_MAX)
+			get_viewport().set_input_as_handled()
+			return
+
+	# ── RMB mouse motion: Skyrim-style object-centered rotation ──────────────
 	if event is InputEventMouseMotion and _rmb_held:
 		var motion := event as InputEventMouseMotion
-		var yaw   := Basis(Vector3.UP,    -motion.relative.x * RMB_ROT_SPEED)
-		var pitch := Basis(Vector3.RIGHT, -motion.relative.y * RMB_ROT_SPEED)
-		_rotation_basis = yaw * _rotation_basis * pitch
-		# Immediately propagate rotation to cluster members
+		# rotate_object_local spins the part around its own center of mass
+		# on its local axes, giving smooth infinite non-locking rotation
+		rotate_object_local(Vector3.UP, -motion.relative.x * RMB_ROT_SPEED)
+		rotate_object_local(Vector3.RIGHT, -motion.relative.y * RMB_ROT_SPEED)
+		# Propagate rotation to cluster members
 		_update_cluster_transforms()
 		get_viewport().set_input_as_handled()
 		return
 
-	# ── Shift key tracking ───────────────────────────────────────────────────
+	# ── Keyboard events ──────────────────────────────────────────────────────
 	if event is InputEventKey:
+		# Shift key tracking
 		if event.keycode == KEY_SHIFT:
 			if event.pressed and not event.is_echo():
 				_shift_held = true
 			elif not event.pressed:
 				_shift_held = false
 
+		# Rotation hotkeys (only on initial press, ignore echo/repeat)
 		elif event.pressed and not event.is_echo():
 			match event.keycode:
 				KEY_Q:
-					_rotation_basis = Basis(Vector3.UP, -ROTATION_STEP) * _rotation_basis
+					rotate_object_local(Vector3.UP, -ROTATION_STEP)
 					_update_cluster_transforms()
 					get_viewport().set_input_as_handled()
 				KEY_E:
-					_rotation_basis = Basis(Vector3.UP,  ROTATION_STEP) * _rotation_basis
+					rotate_object_local(Vector3.UP,  ROTATION_STEP)
 					_update_cluster_transforms()
 					get_viewport().set_input_as_handled()
 				KEY_R:
-					_rotation_basis = _rotation_basis * Basis(Vector3.RIGHT, -ROTATION_STEP)
+					rotate_object_local(Vector3.RIGHT, -ROTATION_STEP)
 					_update_cluster_transforms()
 					get_viewport().set_input_as_handled()
 				KEY_F:
-					_rotation_basis = _rotation_basis * Basis(Vector3.RIGHT,  ROTATION_STEP)
+					rotate_object_local(Vector3.RIGHT,  ROTATION_STEP)
 					_update_cluster_transforms()
 					get_viewport().set_input_as_handled()
 				KEY_T:
-					_rotation_basis = _rotation_basis * Basis(Vector3.FORWARD, -ROTATION_STEP)
+					rotate_object_local(Vector3.FORWARD, -ROTATION_STEP)
 					_update_cluster_transforms()
 					get_viewport().set_input_as_handled()
 				KEY_G:
-					_rotation_basis = _rotation_basis * Basis(Vector3.FORWARD,  ROTATION_STEP)
+					rotate_object_local(Vector3.FORWARD,  ROTATION_STEP)
 					_update_cluster_transforms()
 					get_viewport().set_input_as_handled()
 
 	# ── Shift + mouse drag: free Y/X rotation ────────────────────────────────
 	if event is InputEventMouseMotion and _shift_held and not _rmb_held:
 		var motion := event as InputEventMouseMotion
-		var yaw   := Basis(Vector3.UP,    deg_to_rad( motion.relative.x * MOUSE_ROT_SENSITIVITY))
-		var pitch := Basis(Vector3.RIGHT, deg_to_rad( motion.relative.y * MOUSE_ROT_SENSITIVITY))
-		_rotation_basis = yaw * _rotation_basis * pitch
+		rotate_object_local(Vector3.UP, deg_to_rad(motion.relative.x * MOUSE_ROT_SENSITIVITY))
+		rotate_object_local(Vector3.RIGHT, deg_to_rad(motion.relative.y * MOUSE_ROT_SENSITIVITY))
 		_update_cluster_transforms()
 		get_viewport().set_input_as_handled()
 
@@ -144,22 +164,20 @@ func setup(data: ItemData) -> void:
 func pick_up() -> void:
 	is_held = true
 	is_placed = false
-	freeze = true
-	_rotation_basis = Basis.IDENTITY
+	# Reset orientation for fresh parts
+	global_transform.basis = Basis.IDENTITY
+	_height_offset = 0.0
 	_shift_held = false
 	_rmb_held = false
 	if Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
 		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
-	collision_layer = 0
-	collision_mask = 0
+	_enter_held_physics()
 
 ## Called when picking up an existing loose part already in the scene.
 ## Preserves the part's current orientation so it doesn't snap to a
 ## different angle the moment the player grabs it.
 func pick_up_existing() -> void:
-	# Capture current world rotation into _rotation_basis before any state change,
-	# so _follow_mouse() will apply it unchanged on the first frame.
-	_rotation_basis = global_transform.basis.orthonormalized()
+	_height_offset = 0.0
 
 	# De-parent from AssemblyPivot (or wherever it lives) back to the scene root,
 	# preserving world position so the object doesn't teleport.
@@ -169,14 +187,20 @@ func pick_up_existing() -> void:
 
 	is_held = true
 	is_placed = false
-	freeze = true
 	_shift_held = false
 	_rmb_held = false
 	if Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
 		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
-	# Disable collisions while dragging so raycasts pass through
-	collision_layer = 0
-	collision_mask = 0
+	_enter_held_physics()
+
+## Configure physics state for a held (dragged) object.
+## Disables ALL collisions so the part can be dragged smoothly through space
+## without clipping/stuttering against other objects or the table.
+## The object is frozen so physics forces don't affect it during the drag.
+func _enter_held_physics() -> void:
+	freeze = true
+	collision_layer = 0   # invisible to all collision queries
+	collision_mask  = 0   # doesn't collide with anything
 
 func place_at(world_pos: Vector3, pivot: Node3D) -> void:
 	is_held = false
@@ -192,16 +216,21 @@ func place_at(world_pos: Vector3, pivot: Node3D) -> void:
 	if get_parent() != pivot:
 		reparent(pivot, true)
 
-	freeze = true
-	collision_layer = 2
-	collision_mask = 3
-
+	_exit_held_physics()
 	GameState.register_assembly_part(self)
+
+## Restore physics state when the object is placed/dropped.
+## Re-enables collisions and UNFREEZES the body so Godot's rigid body
+## physics takes over — the object will fall, impact, and settle naturally.
+func _exit_held_physics() -> void:
+	collision_layer = 2   # back on the parts layer
+	collision_mask  = 3   # collide with table (1) + other parts (2)
+	freeze = false        # let physics take over — gravity, impacts, settling
 
 # ── Mouse-follow ─────────────────────────────────────────────────────────────
 func _follow_mouse() -> void:
+	# During RMB rotation, lock position — only orientation changes
 	if _rmb_held:
-		transform.basis = _rotation_basis
 		_update_cluster_transforms()
 		return
 
@@ -212,7 +241,8 @@ func _follow_mouse() -> void:
 	if camera == null:
 		return
 
-	var follow_y := _follow_plane_y
+	# ── Determine table surface Y ─────────────────────────────────────────
+	var table_y := _follow_plane_y
 	var main_node = get_tree().root.get_node_or_null("Main")
 	if main_node:
 		var table_static = main_node.get_node_or_null("TableStaticBody")
@@ -220,8 +250,9 @@ func _follow_mouse() -> void:
 			var col_shape = table_static.get_node_or_null("CollisionShape3D")
 			if col_shape and col_shape.shape is BoxShape3D:
 				var shape_size = (col_shape.shape as BoxShape3D).size
-				follow_y = col_shape.global_position.y + (shape_size.y * 0.5 * col_shape.global_transform.basis.get_scale().y)
+				table_y = col_shape.global_position.y + (shape_size.y * 0.5 * col_shape.global_transform.basis.get_scale().y)
 
+	# ── Project mouse ray onto the table plane for XZ positioning ───────
 	var mouse_pos: Vector2 = viewport.get_mouse_position()
 
 	var saved_transform := camera.global_transform
@@ -242,21 +273,34 @@ func _follow_mouse() -> void:
 	if abs(direction.y) < 0.001:
 		return
 
-	var t: float = (follow_y - origin.y) / direction.y
+	var t: float = (table_y - origin.y) / direction.y
 	var target: Vector3 = origin + direction * t
-	target.y = follow_y + 0.05
-	global_position = target
 
-	transform.basis = _rotation_basis
+	# ── Apply scroll-wheel height offset on the Y-axis ───────────────────
+	var half_h: float = _get_half_height()
+	target.y = table_y + half_h + _height_offset
+
+	# ── Clamp so the object bottom never goes below the table surface ───
+	if target.y - half_h < table_y:
+		target.y = table_y + half_h
+
+	# ── Set position directly (collisions are off during drag phase) ─────
+	global_position = target
 
 	# ── Update all connected cluster members ─────────────────────────────
 	_update_cluster_transforms()
 
 
+## Returns the half-height of this part's bounding box for Y-axis clamping.
+func _get_half_height() -> float:
+	if item_data:
+		return item_data.size.y * 0.5
+	return 0.05
+
+
 ## Repositions all secondary cluster members using their stored relative
 ## offset transforms applied to this primary part's current global_transform.
-## This is called every frame in _follow_mouse() and also during RMB rotation
-## so the cluster always moves and rotates as one rigid unit.
+## Collisions are off during drag, so direct transform assignment is safe.
 func _update_cluster_transforms() -> void:
 	if GameState.held_cluster.is_empty():
 		return

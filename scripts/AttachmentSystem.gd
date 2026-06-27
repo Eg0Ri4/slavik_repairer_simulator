@@ -69,9 +69,15 @@ func _setup_joint(joint: Joint3D, new_part: JunkPart, anchor: JunkPart, pivot: N
 	joint.global_position = joint_pos
 
 	# Now we can safely call get_path_to (nodes must share a common ancestor)
-	if anchor:
+	_assign_paths_deferred.call_deferred(joint, new_part, anchor)
+
+func _assign_paths_deferred(joint: Joint3D, new_part: JunkPart, anchor: JunkPart) -> void:
+	if not is_instance_valid(joint) or not is_instance_valid(new_part) or not joint.is_inside_tree() or not new_part.is_inside_tree():
+		return
+	if anchor and is_instance_valid(anchor) and anchor.is_inside_tree():
 		joint.node_a = joint.get_path_to(anchor)
 	joint.node_b = joint.get_path_to(new_part)
+
 
 # ── Cluster Discovery ────────────────────────────────────────────────────────
 
