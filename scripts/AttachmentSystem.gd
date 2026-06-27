@@ -73,6 +73,123 @@ func _setup_joint(joint: Joint3D, new_part: JunkPart, anchor: JunkPart, pivot: N
 		joint.node_a = joint.get_path_to(anchor)
 	joint.node_b = joint.get_path_to(new_part)
 
+# ── Cluster Discovery ────────────────────────────────────────────────────────
+
+## Perform a BFS/flood-fill through all Joint3D nodes under `search_root` to
+## find every JunkPart that is transitively connected to `root_part` via joints.
+## Returns an Array[JunkPart] that always includes `root_part` as the first element.
+## If `root_part` has no joints, returns [root_part] (a single-element cluster).
+func get_connected_cluster(root_part: JunkPart, search_root: Node3D) -> Array[JunkPart]:
+	# Collect all Joint3D nodes and build an adjacency map:  RID → Array[RID]
+	# We key by RID to avoid identity issues and get O(1) lookups.
+	var body_to_parts: Dictionary = {}   # RID → JunkPart
+	var adjacency: Dictionary = {}       # RID → Array[RID]
+
+	# Pre-index all JunkParts by RID for fast lookup
+	_collect_parts_recursive(search_root, body_to_parts)
+
+	# Also include parts that live directly under the scene root (e.g. loose parts
+	# that were reparented out of the pivot during a prior pick-up).
+	var scene_root := root_part.get_tree().root.get_node_or_null("Main")
+	if scene_root and scene_root != search_root:
+		_collect_parts_recursive(scene_root, body_to_parts)
+
+	# Walk all Joint3D nodes to build edges
+	_collect_joints_recursive(search_root, body_to_parts, adjacency)
+	if scene_root and scene_root != search_root:
+		_collect_joints_recursive(scene_root, body_to_parts, adjacency)
+
+	# BFS from root_part
+	var root_rid := root_part.get_rid()
+	var visited: Dictionary = {}   # RID → true
+	var queue: Array[RID] = [root_rid]
+	visited[root_rid] = true
+
+	while queue.size() > 0:
+		var current_rid: RID = queue.pop_front()
+		if current_rid in adjacency:
+			for neighbor_rid: RID in adjacency[current_rid]:
+				if neighbor_rid not in visited:
+					visited[neighbor_rid] = true
+					queue.push_back(neighbor_rid)
+
+	# Build result — root_part first, then the rest
+	var cluster: Array[JunkPart] = [root_part]
+	for rid: RID in visited:
+		if rid != root_rid and rid in body_to_parts:
+			cluster.append(body_to_parts[rid] as JunkPart)
+
+	return cluster
+
+
+## Return all Joint3D nodes that connect members of the given cluster.
+## Useful for temporarily disabling/enabling joints during compound movement.
+func get_joints_in_cluster(cluster: Array[JunkPart], search_root: Node3D) -> Array[Joint3D]:
+	var cluster_rids: Dictionary = {}
+	for part: JunkPart in cluster:
+		cluster_rids[part.get_rid()] = true
+
+	var joints: Array[Joint3D] = []
+	_find_cluster_joints_recursive(search_root, cluster_rids, joints)
+
+	var scene_root := search_root.get_tree().root.get_node_or_null("Main")
+	if scene_root and scene_root != search_root:
+		_find_cluster_joints_recursive(scene_root, cluster_rids, joints)
+
+	return joints
+
+
+# ── Internal: recursive collectors ───────────────────────────────────────────
+
+func _collect_parts_recursive(node: Node, body_to_parts: Dictionary) -> void:
+	if node is JunkPart:
+		body_to_parts[node.get_rid()] = node
+	for child in node.get_children():
+		if child is JunkPart:
+			body_to_parts[child.get_rid()] = child
+		# Don't recurse deeply — parts are direct children of pivot / scene root
+
+
+func _collect_joints_recursive(node: Node, body_to_parts: Dictionary, adjacency: Dictionary) -> void:
+	for child in node.get_children():
+		if child is Joint3D:
+			var joint := child as Joint3D
+			var body_a: PhysicsBody3D = joint.get_node_or_null(joint.node_a) if joint.node_a else null
+			var body_b: PhysicsBody3D = joint.get_node_or_null(joint.node_b) if joint.node_b else null
+
+			if body_a is JunkPart and body_b is JunkPart:
+				var rid_a: RID = body_a.get_rid()
+				var rid_b: RID = body_b.get_rid()
+
+				if rid_a not in adjacency:
+					adjacency[rid_a] = [] as Array[RID]
+				(adjacency[rid_a] as Array[RID]).append(rid_b)
+
+				if rid_b not in adjacency:
+					adjacency[rid_b] = [] as Array[RID]
+				(adjacency[rid_b] as Array[RID]).append(rid_a)
+
+		# Also check children of JunkParts (joints can be children of parts)
+		if child is JunkPart:
+			_collect_joints_recursive(child, body_to_parts, adjacency)
+
+
+func _find_cluster_joints_recursive(node: Node, cluster_rids: Dictionary, joints: Array[Joint3D]) -> void:
+	for child in node.get_children():
+		if child is Joint3D:
+			var joint := child as Joint3D
+			var body_a: PhysicsBody3D = joint.get_node_or_null(joint.node_a) if joint.node_a else null
+			var body_b: PhysicsBody3D = joint.get_node_or_null(joint.node_b) if joint.node_b else null
+
+			var a_in := body_a is JunkPart and body_a.get_rid() in cluster_rids
+			var b_in := body_b is JunkPart and body_b.get_rid() in cluster_rids
+			if a_in and b_in:
+				joints.append(joint)
+
+		if child is JunkPart:
+			_find_cluster_joints_recursive(child, cluster_rids, joints)
+
+
 # ── Helpers ──────────────────────────────────────────────────────────────────
 func _find_nearest_placed(new_part: JunkPart, pivot: Node3D) -> JunkPart:
 	var nearest: JunkPart = null

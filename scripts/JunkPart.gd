@@ -65,6 +65,8 @@ func _unhandled_input(event: InputEvent) -> void:
 		var yaw   := Basis(Vector3.UP,    -motion.relative.x * RMB_ROT_SPEED)
 		var pitch := Basis(Vector3.RIGHT, -motion.relative.y * RMB_ROT_SPEED)
 		_rotation_basis = yaw * _rotation_basis * pitch
+		# Immediately propagate rotation to cluster members
+		_update_cluster_transforms()
 		get_viewport().set_input_as_handled()
 		return
 
@@ -80,21 +82,27 @@ func _unhandled_input(event: InputEvent) -> void:
 			match event.keycode:
 				KEY_Q:
 					_rotation_basis = Basis(Vector3.UP, -ROTATION_STEP) * _rotation_basis
+					_update_cluster_transforms()
 					get_viewport().set_input_as_handled()
 				KEY_E:
 					_rotation_basis = Basis(Vector3.UP,  ROTATION_STEP) * _rotation_basis
+					_update_cluster_transforms()
 					get_viewport().set_input_as_handled()
 				KEY_R:
 					_rotation_basis = _rotation_basis * Basis(Vector3.RIGHT, -ROTATION_STEP)
+					_update_cluster_transforms()
 					get_viewport().set_input_as_handled()
 				KEY_F:
 					_rotation_basis = _rotation_basis * Basis(Vector3.RIGHT,  ROTATION_STEP)
+					_update_cluster_transforms()
 					get_viewport().set_input_as_handled()
 				KEY_T:
 					_rotation_basis = _rotation_basis * Basis(Vector3.FORWARD, -ROTATION_STEP)
+					_update_cluster_transforms()
 					get_viewport().set_input_as_handled()
 				KEY_G:
 					_rotation_basis = _rotation_basis * Basis(Vector3.FORWARD,  ROTATION_STEP)
+					_update_cluster_transforms()
 					get_viewport().set_input_as_handled()
 
 	# ── Shift + mouse drag: free Y/X rotation ────────────────────────────────
@@ -103,6 +111,7 @@ func _unhandled_input(event: InputEvent) -> void:
 		var yaw   := Basis(Vector3.UP,    deg_to_rad( motion.relative.x * MOUSE_ROT_SENSITIVITY))
 		var pitch := Basis(Vector3.RIGHT, deg_to_rad( motion.relative.y * MOUSE_ROT_SENSITIVITY))
 		_rotation_basis = yaw * _rotation_basis * pitch
+		_update_cluster_transforms()
 		get_viewport().set_input_as_handled()
 
 # ── Public API ───────────────────────────────────────────────────────────────
@@ -193,6 +202,7 @@ func place_at(world_pos: Vector3, pivot: Node3D) -> void:
 func _follow_mouse() -> void:
 	if _rmb_held:
 		transform.basis = _rotation_basis
+		_update_cluster_transforms()
 		return
 
 	var viewport: Viewport = get_viewport()
@@ -238,6 +248,26 @@ func _follow_mouse() -> void:
 	global_position = target
 
 	transform.basis = _rotation_basis
+
+	# ── Update all connected cluster members ─────────────────────────────
+	_update_cluster_transforms()
+
+
+## Repositions all secondary cluster members using their stored relative
+## offset transforms applied to this primary part's current global_transform.
+## This is called every frame in _follow_mouse() and also during RMB rotation
+## so the cluster always moves and rotates as one rigid unit.
+func _update_cluster_transforms() -> void:
+	if GameState.held_cluster.is_empty():
+		return
+
+	var my_transform := global_transform
+	for part: JunkPart in GameState.held_cluster:
+		if not is_instance_valid(part):
+			continue
+		if part in GameState.cluster_offsets:
+			var relative: Transform3D = GameState.cluster_offsets[part]
+			part.global_transform = my_transform * relative
 
 # ── Mesh builder ─────────────────────────────────────────────────────────────
 func _build_mesh(data: ItemData) -> MeshInstance3D:

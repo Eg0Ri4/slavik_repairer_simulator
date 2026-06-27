@@ -247,8 +247,8 @@ func _handle_left_click(mouse_pos: Vector2) -> void:
 # ── Raycast helpers ───────────────────────────────────────────────────────────
 
 ## Raycast against placed/loose JunkParts (collision layer 2).
-## Returns the JunkPart if it is not already held and has no active joint
-## connecting it to another body (i.e. it is truly loose / re-grabbable).
+## Returns the JunkPart if it is not already held. Jointed parts are
+## allowed — the compound movement system will pick up the whole cluster.
 func _raycast_for_part(mouse_pos: Vector2) -> JunkPart:
 	var cam := get_viewport().get_camera_3d()
 	if cam == null:
@@ -275,12 +275,6 @@ func _raycast_for_part(mouse_pos: Vector2) -> JunkPart:
 	if part.is_held:
 		return null
 
-	# Don't grab a part that is fastened via a joint — it's part of a rigid assembly.
-	# We check by scanning the part's children for any Joint3D node added by AttachmentSystem.
-	for child in part.get_children():
-		if child is Joint3D:
-			return null
-
 	return part
 
 func _raycast_for_box(mouse_pos: Vector2) -> JunkBox:
@@ -303,17 +297,65 @@ func _raycast_for_box(mouse_pos: Vector2) -> JunkBox:
 # ── Pick-up helpers ───────────────────────────────────────────────────────────
 
 ## Pick up a JunkPart that is already sitting in the scene (placed or loose).
-## Removes it from the assembly registry and any pivot parenting so it can be
-## freely repositioned and re-placed like a freshly spawned part.
+## Discovers all transitively connected parts via joints (the "cluster") and
+## picks them all up together for compound movement.
 func _pick_up_existing_part(part: JunkPart) -> void:
-	# Remove from GameState assembly list so evaluation ignores it while held
-	GameState.assembly_parts.erase(part)
+	# ── Step 1: Discover the full connected cluster ─────────────────────
+	var cluster: Array[JunkPart] = attachment_system.get_connected_cluster(part, assembly_pivot)
 
-	# Let the part handle its own physics/collision state transition,
-	# preserving its current world orientation.
+	# Build secondary list (everything except the primary clicked part)
+	var secondary: Array[JunkPart] = []
+	for p: JunkPart in cluster:
+		if p != part:
+			secondary.append(p)
+
+	# ── Step 2: Discover joints connecting cluster members ──────────────
+	var joints: Array[Joint3D] = attachment_system.get_joints_in_cluster(cluster, assembly_pivot)
+
+	# Disable cluster joints so they don't fight our manual positioning.
+	# We disable them rather than removing them so we can re-enable on drop.
+	for joint: Joint3D in joints:
+		joint.set("node_a", NodePath(""))
+		joint.set("node_b", NodePath(""))
+
+	# ── Step 3: Remove all cluster parts from assembly registry ─────────
+	for p: JunkPart in cluster:
+		GameState.assembly_parts.erase(p)
+
+	# ── Step 4: Prepare secondary parts for compound movement ───────────
+	for p: JunkPart in secondary:
+		# Capture world transform before any reparenting
+		var world_xform := p.global_transform
+
+		# Reparent to scene root if needed (like pick_up_existing does for primary)
+		if p.get_parent() != self:
+			p.reparent(self, true)
+
+		# Freeze physics and disable collisions
+		p.freeze = true
+		p.collision_layer = 0
+		p.collision_mask = 0
+		p.is_held = false  # only primary is "held" — secondary are passengers
+		p.is_placed = false
+
+		# Restore world transform (reparenting should preserve it, but be safe)
+		p.global_transform = world_xform
+
+	# ── Step 5: Also reparent nails that belong to cluster parts ────────
+	var cluster_set: Dictionary = {}
+	for p: JunkPart in cluster:
+		cluster_set[p] = true
+	for child in assembly_pivot.get_children():
+		if child is Nail:
+			var nail := child as Nail
+			if nail._surface_body in cluster_set or nail._top_body in cluster_set:
+				nail.reparent(self, true)
+
+	# ── Step 6: Pick up the primary part ────────────────────────────────
 	part.pick_up_existing()
 
-	# Register as the currently held part and fire the part_picked_up signal
+	# ── Step 7: Register cluster state in GameState ─────────────────────
+	GameState.pick_up_cluster(part, secondary, joints)
 	GameState.pick_up_part(part)
 
 func _extract_from_box(box: JunkBox) -> void:
@@ -378,7 +420,66 @@ func _place_held_part(mouse_pos: Vector2) -> void:
 
 	drop_pos.y = hit_y + (part.item_data.size.y * 0.5 if part.item_data else 0.1)
 
+	# ── Place the primary part ───────────────────────────────────────────
 	part.place_at(drop_pos, assembly_pivot)
+
+	# ── Place all secondary cluster parts ────────────────────────────────
+	var secondary := GameState.held_cluster.duplicate()
+	var cluster_joints := GameState.cluster_joints.duplicate()
+
+	for p: JunkPart in secondary:
+		if not is_instance_valid(p):
+			continue
+		# Capture current world transform (set by _update_cluster_transforms)
+		var world_xform := p.global_transform
+
+		# Reparent to assembly_pivot
+		if p.get_parent() != assembly_pivot:
+			p.reparent(assembly_pivot, true)
+
+		# Restore placement state
+		p.global_transform = world_xform
+		p.is_held = false
+		p.is_placed = true
+		p.freeze = true
+		p.collision_layer = 2
+		p.collision_mask = 3
+
+		GameState.register_assembly_part(p)
+
+	# ── Reparent nails back to assembly_pivot ────────────────────────────
+	for child in get_children():
+		if child is Nail:
+			child.reparent(assembly_pivot, true)
+
+	# ── Re-enable cluster joints with corrected node paths ──────────────
+	for joint: Joint3D in cluster_joints:
+		if not is_instance_valid(joint):
+			continue
+		# Reparent joint to assembly_pivot if needed
+		if joint.get_parent() != assembly_pivot:
+			joint.reparent(assembly_pivot, true)
+		# We need to find which bodies this joint originally connected.
+		# The joint was created by Nail._create_joint() or AttachmentSystem.
+		# We stored references are gone (paths were cleared), but the joint's
+		# position is at the midpoint of the two bodies it connects.
+		# We'll find the two nearest cluster parts to the joint's position.
+		var j_pos := joint.global_position
+		var all_cluster: Array[JunkPart] = [part as JunkPart]
+		all_cluster.append_array(secondary)
+		var sorted_by_dist: Array[JunkPart] = []
+		sorted_by_dist.append_array(all_cluster)
+		sorted_by_dist.sort_custom(func(a: JunkPart, b: JunkPart) -> bool:
+			return a.global_position.distance_to(j_pos) < b.global_position.distance_to(j_pos)
+		)
+		if sorted_by_dist.size() >= 2:
+			joint.node_a = joint.get_path_to(sorted_by_dist[0])
+			joint.node_b = joint.get_path_to(sorted_by_dist[1])
+
+	# ── Clean up cluster state ───────────────────────────────────────────
+	GameState.drop_cluster()
+
+	# ── Attach primary if other parts exist (for solo parts without cluster) ──
 	_attach_part(part)
 	GameState.place_part()
 
@@ -478,8 +579,22 @@ func _on_trust_me_pressed() -> void:
 	]
 
 func _on_reset_pressed() -> void:
+	# Free any cluster members currently held (reparented under Main)
+	for part: JunkPart in GameState.held_cluster:
+		if is_instance_valid(part):
+			part.queue_free()
+	for joint: Joint3D in GameState.cluster_joints:
+		if is_instance_valid(joint):
+			joint.queue_free()
+	GameState.drop_cluster()
+
 	for child in assembly_pivot.get_children():
 		if child is JunkPart or child is Joint3D or child is Nail:
+			child.queue_free()
+
+	# Also free nails/parts reparented under Main during pick-up
+	for child in get_children():
+		if child is Nail:
 			child.queue_free()
 
 	if GameState.held_part:
