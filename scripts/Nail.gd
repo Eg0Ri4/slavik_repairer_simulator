@@ -2,7 +2,7 @@
 ## A visual nail that can be struck repeatedly to drive it into a surface.
 ## Each strike() call tweens the nail deeper along its local -Y axis.
 ## When target depth is reached, the nail reparents to the surface body
-## and creates a Generic6DOFJoint3D between the two bodies it connects.
+## and creates a PinJoint3D between the two bodies it connects.
 class_name Nail
 extends RigidBody3D
 
@@ -20,6 +20,7 @@ extends RigidBody3D
 signal nail_struck(progress: float)
 ## Emitted once the nail reaches target depth and is fastened.
 signal nail_fastened()
+signal nail_unfastened()
 
 # ── Internal state ───────────────────────────────────────────────────────────
 var _current_depth: float = 0.0
@@ -56,6 +57,7 @@ func _ready() -> void:
 	_build_head_area()
 	_build_collision()
 	
+	# Grace period: if not struck within 5 seconds, the nail drops loose.
 	_grace_timer_ref = get_tree().create_timer(5.0)
 	_grace_timer_ref.timeout.connect(_on_grace_timeout)
 
@@ -77,6 +79,7 @@ func strike(power: float = 1.0) -> void:
 	if _is_fastened or _is_animating or _is_dropped:
 		return
 
+	# Cancel the grace timer on first strike
 	if _grace_timer_ref:
 		if _grace_timer_ref.timeout.is_connected(_on_grace_timeout):
 			_grace_timer_ref.timeout.disconnect(_on_grace_timeout)
@@ -114,60 +117,25 @@ func strike(power: float = 1.0) -> void:
 
 func _on_sink_finished() -> void:
 	_is_animating = false
-	if _current_depth >= target_depth:
-		_fasten()
+	if _current_depth >= target_depth and not _is_fastened:
+		_is_fastened = true
+		_create_joint()
 
 
-func _fasten() -> void:
-	_is_fastened = true
-
-	# Reparent the nail to the surface body so it moves with it
-	if _surface_body:
-		var t := global_transform
-		reparent(_surface_body, false)
-		global_transform = t
-
-	# Merge the two bodies (if both exist)
-	if _surface_body and _top_body:
-		_merge_bodies()
-
-	nail_fastened.emit()
-
-func _merge_bodies() -> void:
-	if not (_surface_body is JunkPart and _top_body is JunkPart):
-		return
-		
-	var main_body := _surface_body as JunkPart
-	var attached_body := _top_body as JunkPart
-
-	# 1. Move all collision shapes (recursive search)
-	var shapes = attached_body.find_children("*", "CollisionShape3D", true, false)
-	for shape in shapes:
-		shape.reparent(main_body, true)
-		
-	# 2. Move all visual meshes from the attached body
-	var meshes = attached_body.find_children("*", "MeshInstance3D", true, false)
-	for mesh in meshes:
-		mesh.reparent(main_body, true)
-		
-	# 3. Move all visual meshes from the nail itself
-	var nail_meshes = find_children("*", "MeshInstance3D", true, false)
-	for mesh in nail_meshes:
-		mesh.reparent(main_body, true)
-		
-	# 4. Absorb the logical tags and data so EvaluationSystem can still grade it
-	main_body.absorb_part(attached_body)
-		
-	# 5. Combine mass (Godot 4 automatically recalculates the center of mass based on shapes)
-	main_body.mass += attached_body.mass
-	
-	# 6. Destroy the redundant parent nodes
-	attached_body.queue_free()
-	queue_free()
-
+# ── Crowbar Pull API ─────────────────────────────────────────────────────────
+## Pull the nail outward (decrement depth). Called by NailTool when CROWBAR active.
 func pull(power: float = 1.0) -> void:
 	if _is_animating or _is_dropped:
 		return
+
+	# If the nail's visuals are merged into the surface body, restore them early 
+	# so they can actually move with the tween animation!
+	var my_nodes = get_meta("merged_nodes", [])
+	if my_nodes.size() > 0:
+		for child in my_nodes:
+			if is_instance_valid(child):
+				child.reparent(self, true)
+		set_meta("merged_nodes", [])
 
 	_is_animating = true
 
@@ -204,13 +172,54 @@ func _on_pull_finished() -> void:
 func _unfasten() -> void:
 	if _is_fastened:
 		_is_fastened = false
-		_break_joint()
+		_undo_merge()
+		nail_unfastened.emit()
 	_drop()
 
+func _undo_merge() -> void:
+	# 1. Restore the nail's own nodes
+	var my_nodes = get_meta("merged_nodes", [])
+	for child in my_nodes:
+		if is_instance_valid(child):
+			child.reparent(self, true)
+			
+	if _surface_body is RigidBody3D:
+		_surface_body.mass -= mass
+
+	# 2. Restore the top body
+	if _top_body and is_instance_valid(_top_body):
+		var top_nodes = _top_body.get_meta("merged_nodes", [])
+		for child in top_nodes:
+			if is_instance_valid(child):
+				child.reparent(_top_body, true)
+				
+		if _surface_body is RigidBody3D and _top_body is RigidBody3D:
+			_surface_body.mass -= _top_body.mass
+			
+		# Wake the top body back up and put it alongside the surface body
+		if _surface_body and is_instance_valid(_surface_body) and _surface_body.get_parent():
+			_top_body.reparent(_surface_body.get_parent(), true)
+		else:
+			_top_body.reparent(get_tree().current_scene, true)
+			
+		_top_body.process_mode = Node.PROCESS_MODE_INHERIT
+		
+		# Put it back in GameState
+		var GameState = get_tree().root.get_node_or_null("Main/GameState")
+		if GameState == null:
+			GameState = get_node("/root/GameState")
+		if GameState and GameState.has_method("register_assembly_part"):
+			GameState.register_assembly_part(_top_body)
+		elif GameState and "assembly_parts" in GameState:
+			if not GameState.assembly_parts.has(_top_body):
+				GameState.assembly_parts.append(_top_body)
+				
+		# Note: We cannot easily 'un-absorb' tags from JunkPart's merged_subparts 
+		# without tracking exact indices, but typically removing it restores physics interaction, 
+		# which is what the user expects from the crowbar.
+
 func _break_joint() -> void:
-	if is_instance_valid(_joint):
-		_joint.queue_free()
-		_joint = null
+	pass
 
 func _drop() -> void:
 	_is_dropped = true
@@ -228,6 +237,7 @@ func _drop() -> void:
 	_start_decay_timer()
 
 func _start_decay_timer() -> void:
+	# Dropped nails decay and are freed after 10 seconds
 	var t = get_tree().create_timer(10.0)
 	t.timeout.connect(func():
 		if is_instance_valid(self):
@@ -235,7 +245,68 @@ func _start_decay_timer() -> void:
 	)
 
 
+# ── Monolithic Object Merging ────────────────────────────────────────────────
+func _create_joint() -> void:
+	if not (_surface_body is RigidBody3D or _surface_body is StaticBody3D):
+		return
 
+	# 1. Store state and reparent the nail's visuals
+	set_meta("merged_nodes", [])
+	var my_nodes = []
+	# We iterate backwards or safely since we modify the tree
+	for child in get_children():
+		if child is Node3D and child != _head_area:
+			my_nodes.append(child)
+			
+	for child in my_nodes:
+		child.reparent(_surface_body, true)
+		var arr = get_meta("merged_nodes")
+		arr.append(child)
+			
+	if _surface_body is RigidBody3D:
+		_surface_body.mass += mass # The nail's mass
+
+	# 2. If there is a valid second body to merge, do it now
+	if _top_body is RigidBody3D or _top_body is StaticBody3D:
+		_top_body.set_meta("merged_nodes", [])
+		var top_nodes = []
+		for child in _top_body.get_children():
+			if child is Node3D:
+				top_nodes.append(child)
+				
+		for child in top_nodes:
+			child.reparent(_surface_body, true)
+			var arr = _top_body.get_meta("merged_nodes")
+			arr.append(child)
+				
+		if _surface_body is RigidBody3D and _top_body is RigidBody3D:
+			_surface_body.mass += _top_body.mass
+			
+		# Disable the empty top body and make it a passenger
+		_top_body.process_mode = Node.PROCESS_MODE_DISABLED
+		_top_body.reparent(_surface_body, true)
+		
+		# We must remove it from GameState so it isn't considered an independent part
+		var GameState = get_tree().root.get_node_or_null("Main/GameState")
+		if GameState == null:
+			GameState = get_node("/root/GameState")
+		if GameState and GameState.has_method("unregister_assembly_part"):
+			GameState.unregister_assembly_part(_top_body)
+		elif GameState and "assembly_parts" in GameState:
+			GameState.assembly_parts.erase(_top_body)
+
+	# 3. Make the nail itself a passenger
+	freeze_mode = RigidBody3D.FREEZE_MODE_KINEMATIC
+	freeze = true
+	# We DO NOT disable process_mode so the head area can still be clicked by the crowbar!
+	reparent(_surface_body, true)
+
+	_is_fastened = true
+	nail_fastened.emit()
+	# WE DO NOT queue_free() ANYMORE! The nail and top_body remain as dormant children.
+
+func _do_assign_joint_paths(joint: Joint3D, body_a: Node3D, body_b: Node3D) -> void:
+	pass # Deprecated, replaced by monolithic merge
 
 
 # ── Queries ──────────────────────────────────────────────────────────────────

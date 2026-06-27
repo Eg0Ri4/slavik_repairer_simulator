@@ -17,6 +17,12 @@ var merged_subparts: Array[Dictionary] = []
 # The visual mesh child
 var _mesh_node: Node3D = null
 
+## Optional 3D asset model to use instead of primitive shapes
+@export var custom_model_scene: PackedScene
+
+## Cached half-height for vertical alignment when following the mouse
+var _model_half_height: float = 0.05
+
 # ── Placement state ──────────────────────────────────────────────────────────
 var _follow_plane_y: float = 0.07   # height of table surface in world space
 
@@ -92,29 +98,109 @@ func setup(data: ItemData) -> void:
 	item_data = data
 	tags = data.tags.duplicate()
 
-	_mesh_node = _build_mesh(data)
-	add_child(_mesh_node)
+	var vol: float = data.size.x * data.size.y * data.size.z
+	_model_half_height = data.size.y * 0.5
+	var max_dim: float = max(data.size.x, max(data.size.y, data.size.z))
 
-	var col: CollisionShape3D = CollisionShape3D.new()
-	match data.shape_type:
-		"cylinder":
-			var cyl := CylinderShape3D.new()
-			cyl.radius = data.size.x * 0.5
-			cyl.height = data.size.y
-			col.shape = cyl
-		"sphere":
-			var sph := SphereShape3D.new()
-			sph.radius = data.size.x * 0.5
-			col.shape = sph
-		_:  # "box"
+	if custom_model_scene:
+		_mesh_node = custom_model_scene.instantiate()
+		add_child(_mesh_node)
+		
+		var total_aabb := AABB()
+		var has_aabb := false
+		var has_custom_collision := false
+		
+		var meshes := _find_all_meshes(_mesh_node)
+		
+		# 1. First find the total AABB
+		for mesh_inst in meshes:
+			if mesh_inst.mesh:
+				var local_aabb = mesh_inst.get_aabb()
+				var xform = _get_relative_transform(_mesh_node, mesh_inst)
+				
+				var end = local_aabb.position + local_aabb.size
+				var corners = [
+					xform * Vector3(local_aabb.position.x, local_aabb.position.y, local_aabb.position.z),
+					xform * Vector3(local_aabb.position.x, local_aabb.position.y, end.z),
+					xform * Vector3(local_aabb.position.x, end.y, local_aabb.position.z),
+					xform * Vector3(local_aabb.position.x, end.y, end.z),
+					xform * Vector3(end.x, local_aabb.position.y, local_aabb.position.z),
+					xform * Vector3(end.x, local_aabb.position.y, end.z),
+					xform * Vector3(end.x, end.y, local_aabb.position.z),
+					xform * Vector3(end.x, end.y, end.z)
+				]
+				var transformed_aabb = AABB(corners[0], Vector3.ZERO)
+				for i in range(1, 8):
+					transformed_aabb = transformed_aabb.expand(corners[i])
+					
+				if not has_aabb:
+					total_aabb = transformed_aabb
+					has_aabb = true
+				else:
+					total_aabb = total_aabb.merge(transformed_aabb)
+
+		# Center the mesh node so rotation centers properly
+		if has_aabb:
+			_mesh_node.position = -total_aabb.get_center()
+
+		# 2. Generate convex collision shape
+		for mesh_inst in meshes:
+			if mesh_inst.mesh:
+				var shape = mesh_inst.mesh.create_convex_shape(true, true)
+				if shape:
+					var col := CollisionShape3D.new()
+					col.shape = shape
+					# Offset by the mesh node position we just applied!
+					var rel = _get_relative_transform(_mesh_node, mesh_inst)
+					col.transform = Transform3D(rel.basis, _mesh_node.position + rel.origin)
+					add_child(col)
+					has_custom_collision = true
+		
+		if has_aabb:
+			vol = total_aabb.size.x * total_aabb.size.y * total_aabb.size.z
+			_model_half_height = total_aabb.size.y * 0.5
+			max_dim = max(total_aabb.size.x, max(total_aabb.size.y, total_aabb.size.z))
+			
+		if not has_custom_collision:
+			var col := CollisionShape3D.new()
 			var box := BoxShape3D.new()
-			box.size = data.size
+			box.size = total_aabb.size if has_aabb else data.size
 			col.shape = box
-	add_child(col)
+			# Since mesh is centered, the BoxShape is naturally centered at origin as well
+			add_child(col)
+	else:
+		_mesh_node = _build_mesh(data)
+		add_child(_mesh_node)
+
+		var col := CollisionShape3D.new()
+		match data.shape_type:
+			"cylinder":
+				var cyl := CylinderShape3D.new()
+				cyl.radius = data.size.x * 0.5
+				cyl.height = data.size.y
+				col.shape = cyl
+			"sphere":
+				var sph := SphereShape3D.new()
+				sph.radius = data.size.x * 0.5
+				col.shape = sph
+			_:  # "box"
+				var box := BoxShape3D.new()
+				box.size = data.size
+				col.shape = box
+		add_child(col)
 
 	# Set mass based on approximate volume for realistic physics
-	var vol: float = data.size.x * data.size.y * data.size.z
 	mass = clampf(vol * 800.0, 0.2, 10.0)  # ~density of wood/plastic
+
+	# Scale dynamically so the models are small and not gigantic
+	var target_dim: float = 0.2
+	var scale_factor = target_dim / max_dim if max_dim > 0.001 else 1.0
+
+	for child in get_children():
+		if child is Node3D:
+			child.scale *= scale_factor
+			child.position *= scale_factor
+	_model_half_height *= scale_factor
 
 ## Called when spawning a brand-new part from a JunkBox.
 ## Resets rotation to identity so the part starts clean.
@@ -251,25 +337,44 @@ func _follow_mouse() -> void:
 
 ## Returns the half-height of this part's bounding box for Y-axis clamping.
 func _get_half_height() -> float:
-	if item_data:
-		return item_data.size.y * 0.5
-	return 0.05
+	return _model_half_height
 
 
 ## Repositions all secondary cluster members using their stored relative
 ## offset transforms applied to this primary part's current global_transform.
 ## Collisions are off during drag, so direct transform assignment is safe.
 func _update_cluster_transforms() -> void:
+	# CRITICAL SAFETY CHECK: Guard against null or empty cluster arrays.
+	# This prevents the crash: "Invalid access to property or key 'held_cluster'"
 	if GameState.held_cluster == null or GameState.held_cluster.is_empty():
 		return
 
 	var my_transform := global_transform
-	for part: JunkPart in GameState.held_cluster:
+	for part: Node3D in GameState.held_cluster:
 		if not is_instance_valid(part):
 			continue
 		if part in GameState.cluster_offsets:
 			var relative: Transform3D = GameState.cluster_offsets[part]
 			part.global_transform = my_transform * relative
+
+# ── Helpers ──────────────────────────────────────────────────────────────────
+func _find_all_meshes(node: Node) -> Array[MeshInstance3D]:
+	var result: Array[MeshInstance3D] = []
+	if node is MeshInstance3D:
+		result.append(node)
+	for child in node.get_children():
+		result.append_array(_find_all_meshes(child))
+	return result
+
+func _get_relative_transform(root: Node3D, target: Node3D) -> Transform3D:
+	if root == target:
+		return Transform3D()
+	var t := target.transform
+	var p := target.get_parent()
+	while p and p != root and p is Node3D:
+		t = p.transform * t
+		p = p.get_parent()
+	return t
 
 # ── Mesh builder ─────────────────────────────────────────────────────────────
 func _build_mesh(data: ItemData) -> MeshInstance3D:
@@ -305,7 +410,7 @@ func _build_mesh(data: ItemData) -> MeshInstance3D:
 # ── Monolithic Merging ───────────────────────────────────────────────────────
 ## Absorbs another JunkPart's logical tags and subparts into this one, relative
 ## to this part's current coordinate space.
-func absorb_part(other: JunkPart) -> void:
+func absorb_part(other: Node3D) -> void:
 	# Calculate other part's transform relative to this part
 	var relative_transform: Transform3D = global_transform.affine_inverse() * other.global_transform
 	

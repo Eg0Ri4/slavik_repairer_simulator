@@ -1,6 +1,7 @@
 ## Main.gd
 ## Root script for the "Trust Me, I'm an Engineer" 3D scene.
 ## Builds the entire scene tree in _ready() to avoid complex .tscn serialization.
+## Orchestrates UI initialization, raycasting, tools, and evaluation states.
 extends Node3D
 
 # ── Child node references (populated in _ready) ──────────────────────────────
@@ -17,6 +18,7 @@ var boxes: Array[JunkBox] = []
 
 # UI references
 var ui_layer: CanvasLayer
+var _hud_root: Control
 var tool_tape_btn: Button
 var tool_nail_btn: Button
 var tool_crowbar_btn: Button
@@ -26,9 +28,14 @@ var result_label: Label
 var held_label: Label
 var view_toggle_btn: Button
 var order_desc_label: Label
+var order_title_label: Label
 var part_name_label: Label
 var instructions_label: Label
 var nail_status_label: Label
+
+# Silhouette overlay (shown during evaluation)
+var _silhouette_overlay: TextureRect = null
+var _eval_back_btn: Button = null
 
 # Hover highlight state
 var _hovered_box: JunkBox = null
@@ -67,17 +74,23 @@ func _ready() -> void:
 func _setup_menu() -> void:
 	var menu = MenuController.new()
 	menu.name = "MenuController"
-	add_child(menu)
-	# ui_layer is shown by camera_state_changed when the tween finishes
-	menu.game_started.connect(func(): pass)
-	menu.returned_to_menu.connect(func(): ui_layer.visible = false)
+	ui_layer.add_child(menu)
+	menu.game_started.connect(func():
+		_hud_root.visible = true
+		view_toggle_btn.visible = true
+	)
+	menu.returned_to_menu.connect(func():
+		_hud_root.visible = false
+		view_toggle_btn.visible = false
+	)
 	
-	ui_layer.visible = false
+	_hud_root.visible = false
+	if view_toggle_btn:
+		view_toggle_btn.visible = false
 	GameState.set_phase(GameState.GamePhase.MENU)
 
 func _on_phase_changed(phase: GameState.GamePhase) -> void:
-	if phase == GameState.GamePhase.MENU:
-		ui_layer.visible = false
+	pass
 
 func _build_systems() -> void:
 	attachment_system = AttachmentSystem.new()
@@ -97,6 +110,7 @@ func _build_systems() -> void:
 	nail_tool.nail_strike_performed.connect(_on_nail_strike)
 	nail_tool.nail_fully_driven.connect(_on_nail_driven)
 	nail_tool.nail_placement_blocked.connect(_on_nail_placement_blocked)
+	nail_tool.tape_removed.connect(_on_tape_removed)
 
 	tape_tool = TapeTool.new()
 	tape_tool.name = "TapeTool"
@@ -113,17 +127,23 @@ func _build_ui() -> void:
 	ui_layer = CanvasLayer.new()
 	ui_layer.name = "UI"
 	add_child(ui_layer)
+	
+	_hud_root = Control.new()
+	_hud_root.name = "HudRoot"
+	_hud_root.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_hud_root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	ui_layer.add_child(_hud_root)
 
 	# ── Order Panel ───────────────────────────────────────────────────────────
 	var panel := _make_panel(Vector2(10, 10), Vector2(320, 215))
-	ui_layer.add_child(panel)
+	_hud_root.add_child(panel)
 
-	var order_title := Label.new()
-	order_title.name = "OrderTitle"
-	order_title.text = "📋 REPAIR ORDER"
-	order_title.add_theme_font_size_override("font_size", 16)
-	order_title.position = Vector2(10, 10)
-	panel.add_child(order_title)
+	order_title_label = Label.new()
+	order_title_label.name = "OrderTitle"
+	order_title_label.text = "📋 REPAIR ORDER"
+	order_title_label.add_theme_font_size_override("font_size", 16)
+	order_title_label.position = Vector2(10, 10)
+	panel.add_child(order_title_label)
 
 	order_desc_label = Label.new()
 	order_desc_label.name = "OrderDesc"
@@ -144,7 +164,7 @@ func _build_ui() -> void:
 
 	instructions_label = Label.new()
 	instructions_label.name = "Instructions"
-	instructions_label.text = "Hold RMB: rotate held part\nNo part + RMB drag: orbit assembly\nLMB part on table: pick it back up\nClick box: grab part  ·  LMB: place\nScroll: raise/lower held part"
+	instructions_label.text = "Hold RMB: rotate held part\nLMB part on table: pick it back up\nClick box: grab part  ·  LMB: place\nScroll: raise/lower held part"
 	instructions_label.add_theme_color_override("font_color", Color(0.75, 0.75, 0.75))
 	instructions_label.add_theme_font_size_override("font_size", 11)
 	instructions_label.position = Vector2(10, 125)
@@ -152,7 +172,7 @@ func _build_ui() -> void:
 
 	# ── Tool selector ─────────────────────────────────────────────────────────
 	var tool_panel := _make_panel(Vector2(10, 235), Vector2(320, 115))
-	ui_layer.add_child(tool_panel)
+	_hud_root.add_child(tool_panel)
 
 	var tool_title := Label.new()
 	tool_title.text = "🔧 ATTACHMENT TOOL"
@@ -205,12 +225,12 @@ func _build_ui() -> void:
 	trust_me_btn.add_theme_font_size_override("font_size", 15)
 	trust_me_btn.add_theme_color_override("font_color", Color(1, 1, 0))
 	trust_me_btn.pressed.connect(_on_trust_me_pressed)
-	ui_layer.add_child(trust_me_btn)
+	_hud_root.add_child(trust_me_btn)
 
 	# ── Result display ────────────────────────────────────────────────────────
 	var result_panel := _make_panel(Vector2(10, 470), Vector2(320, 135))
 	result_panel.name = "ResultPanel"
-	ui_layer.add_child(result_panel)
+	_hud_root.add_child(result_panel)
 
 	result_label = Label.new()
 	result_label.name = "ResultLabel"
@@ -224,13 +244,33 @@ func _build_ui() -> void:
 	# ── Reset button ──────────────────────────────────────────────────────────
 	var reset_btn := _make_button("🗑 CLEAR ASSEMBLY", Vector2(10, 615), Vector2(320, 36))
 	reset_btn.pressed.connect(_on_reset_pressed)
-	ui_layer.add_child(reset_btn)
+	_hud_root.add_child(reset_btn)
+
+	# ── Silhouette overlay (hidden until evaluation) ──────────────────────────
+	_silhouette_overlay = TextureRect.new()
+	_silhouette_overlay.name = "SilhouetteOverlay"
+	_silhouette_overlay.visible = false
+	_silhouette_overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_silhouette_overlay.modulate = Color(1, 1, 1, 0.4)  # semi-transparent
+	_silhouette_overlay.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	_silhouette_overlay.set_anchors_and_offsets_preset(Control.PRESET_CENTER)
+	_silhouette_overlay.custom_minimum_size = Vector2(400, 400)
+	ui_layer.add_child(_silhouette_overlay)
+
+	# ── Back from eval button (hidden until evaluation) ───────────────────────
+	_eval_back_btn = _make_button("↩ BACK TO WORKSPACE", Vector2(10, 10), Vector2(220, 40))
+	_eval_back_btn.visible = false
+	_eval_back_btn.pressed.connect(_exit_eval_view)
+	ui_layer.add_child(_eval_back_btn)
 
 # ── Order setup ──────────────────────────────────────────────────────────────
 func _setup_order() -> void:
 	_order = OrderData.new()
-	_order.order_name = "Broken Workshop Fan"
-	_order.description = "The workshop fan stopped working! Needs:\n• A BLADE near the top\n• A MOTOR in the center\n• A FRAME at the base"
+	_order.toy_name = "Broken Workshop Fan"
+	_order.client_description = "The workshop fan stopped working! Needs:\n• A BLADE near the top\n• A MOTOR in the center\n• A FRAME at the base"
+	_order.required_component_tags = ["blade", "motor", "frame"]
+	_order.pass_tolerance = 80.0
+	# Legacy requirements for spatial-tag evaluation fallback
 	_order.requirements = [
 		{"required_tag": "blade",  "target_position": Vector3(0.0,  0.30, 0.0), "points": 100},
 		{"required_tag": "motor",  "target_position": Vector3(0.0,  0.00, 0.0), "points": 150},
@@ -239,22 +279,40 @@ func _setup_order() -> void:
 	_order.tolerance = 0.5
 	GameState.current_order = _order
 
+	# Dynamically inject order fields into the UI card
+	_populate_order_ui(_order)
+
+## Dynamically populate the REPAIR ORDER UI card from the loaded .tres resource.
+func _populate_order_ui(order: OrderData) -> void:
+	if order_title_label:
+		order_title_label.text = "📋 %s" % order.toy_name
 	if order_desc_label:
-		order_desc_label.text = _order.description
+		order_desc_label.text = order.client_description
 
 # ── Input handling ────────────────────────────────────────────────────────────
-func _input(event: InputEvent) -> void:
+## Uses _unhandled_input for key events (replaces broken Input.is_key_just_pressed polling).
+func _unhandled_input(event: InputEvent) -> void:
 	if not GameState.is_playing() or GameState.camera_state == "TRANSITIONING" or GameState.camera_state == "MENU_VIEW":
 		return
-		
+
 	if event is InputEventKey and event.pressed and not event.is_echo():
 		if event.keycode == KEY_TAB:
 			_on_view_toggle_pressed()
+			get_viewport().set_input_as_handled()
 		elif event.keycode == KEY_ESCAPE:
+			# Tool deselection: Escape resets to "none"
 			GameState.set_active_tool("none")
 			_update_tool_buttons()
+			get_viewport().set_input_as_handled()
+
+func _input(event: InputEvent) -> void:
+	if not GameState.is_playing() or GameState.camera_state == "TRANSITIONING" or GameState.camera_state == "MENU_VIEW":
+		return
 
 	if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
+		# Don't process clicks during evaluation view
+		if GameState.camera_state == "EVAL_VIEW":
+			return
 		_handle_left_click(event.position)
 
 func _handle_left_click(mouse_pos: Vector2) -> void:
@@ -269,31 +327,32 @@ func _handle_left_click(mouse_pos: Vector2) -> void:
 				# Already holding something — place it
 				_place_held_part(mouse_pos)
 			else:
-				# ── Priority 1: nail tool intercept ──────────────────────────
+				# ── Priority 1: nail/crowbar tool intercept ──────────────
 				if (GameState.active_tool == "nail" or GameState.active_tool == "crowbar") and nail_tool.handle_click(mouse_pos):
 					return
 					
-				# ── Priority 1.5: tape tool intercept ────────────────────────
+				# ── Priority 1.5: tape tool intercept ────────────────────
 				if GameState.active_tool == "tape" and tape_tool.handle_click(mouse_pos):
 					return
 
-				# ── Priority 2: pick up an existing loose JunkPart ───────────
-				var existing := _raycast_for_part(mouse_pos)
-				if existing:
-					_pick_up_existing_part(existing)
-					return
+				# ── Priority 2: pick up an existing loose JunkPart ───────
+				if GameState.active_tool == "none":
+					var existing := _raycast_for_part(mouse_pos)
+					if existing:
+						_pick_up_existing_part(existing)
+						return
 
-				# ── Priority 3: grab a new part from a JunkBox ───────────────
-				var box := _raycast_for_box(mouse_pos)
-				if box:
-					_extract_from_box(box)
+					# ── Priority 3: grab a new part from a JunkBox ───────────
+					var box := _raycast_for_box(mouse_pos)
+					if box:
+						_extract_from_box(box)
 
 # ── Raycast helpers ───────────────────────────────────────────────────────────
 
 ## Raycast against placed/loose JunkParts (collision layer 2).
 ## Returns the JunkPart if it is not already held. Jointed parts are
 ## allowed — the compound movement system will pick up the whole cluster.
-func _raycast_for_part(mouse_pos: Vector2) -> JunkPart:
+func _raycast_for_part(mouse_pos: Vector2) -> Node3D:
 	var cam := get_viewport().get_camera_3d()
 	if cam == null:
 		return null
@@ -313,7 +372,7 @@ func _raycast_for_part(mouse_pos: Vector2) -> JunkPart:
 	if not (collider is JunkPart):
 		return null
 
-	var part := collider as JunkPart
+	var part := collider as Node3D
 
 	# Don't re-grab something already in the air
 	if part.is_held:
@@ -343,9 +402,9 @@ func _raycast_for_box(mouse_pos: Vector2) -> JunkBox:
 ## Pick up a JunkPart that is already sitting in the scene (placed or loose).
 ## Discovers all transitively connected parts via joints (the "cluster") and
 ## picks them all up together for compound movement.
-func _pick_up_existing_part(part: JunkPart) -> void:
+func _pick_up_existing_part(part: Node3D) -> void:
 	# ── Step 1: Discover the full connected cluster ─────────────────────
-	var cluster: Array[JunkPart] = attachment_system.get_connected_cluster(part, assembly_pivot)
+	var cluster: Array[Node3D] = attachment_system.get_connected_cluster(part, assembly_pivot)
 
 	# ── Check if any part in the cluster is attached to the base ────────
 	if _is_cluster_attached_to_base(cluster):
@@ -354,8 +413,8 @@ func _pick_up_existing_part(part: JunkPart) -> void:
 		return
 
 	# Build secondary list (everything except the primary clicked part)
-	var secondary: Array[JunkPart] = []
-	for p: JunkPart in cluster:
+	var secondary: Array[Node3D] = []
+	for p: Node3D in cluster:
 		if p != part:
 			secondary.append(p)
 
@@ -369,11 +428,11 @@ func _pick_up_existing_part(part: JunkPart) -> void:
 		joint.set("node_b", NodePath(""))
 
 	# ── Step 3: Remove all cluster parts from assembly registry ─────────
-	for p: JunkPart in cluster:
+	for p: Node3D in cluster:
 		GameState.assembly_parts.erase(p)
 
 	# ── Step 4: Prepare secondary parts for compound movement ───────────
-	for p: JunkPart in secondary:
+	for p: Node3D in secondary:
 		# Capture world transform before any reparenting
 		var world_xform := p.global_transform
 
@@ -393,7 +452,7 @@ func _pick_up_existing_part(part: JunkPart) -> void:
 
 	# ── Step 5: Also reparent nails that belong to cluster parts ────────
 	var cluster_set: Dictionary = {}
-	for p: JunkPart in cluster:
+	for p: Node3D in cluster:
 		cluster_set[p] = true
 	for child in assembly_pivot.get_children():
 		if child is Nail:
@@ -407,8 +466,13 @@ func _pick_up_existing_part(part: JunkPart) -> void:
 	# ── Step 7: Register cluster state in GameState ─────────────────────
 	GameState.pick_up_cluster(part, secondary, joints)
 	GameState.pick_up_part(part)
+	
+	# ── Step 8: Wake up all remaining parts so they don't float! ────────
+	for child in assembly_pivot.get_children():
+		if child is RigidBody3D:
+			child.sleeping = false
 
-func _is_cluster_attached_to_base(cluster: Array[JunkPart]) -> bool:
+func _is_cluster_attached_to_base(cluster: Array[Node3D]) -> bool:
 	var cluster_rids := {}
 	for p in cluster:
 		cluster_rids[p.get_rid()] = true
@@ -429,15 +493,23 @@ func _is_cluster_attached_to_base(cluster: Array[JunkPart]) -> bool:
 	return false
 
 func _extract_from_box(box: JunkBox) -> void:
-	var item_data := box.extract_random_part()
-	if item_data == null:
+	var result = box.extract_random_part()
+	if result.is_empty() or not result.has("data"):
 		return
+		
+	var item_data: ItemData = result["data"]
+	var model_path: String = result.get("model_path", "")
 
 	var part := JunkPart.new()
+	if not model_path.is_empty():
+		var scene = ResourceLoader.load(model_path) as PackedScene
+		if scene:
+			part.custom_model_scene = scene
+			
 	part.setup(item_data)
 	add_child(part)
-	var spawn_pos := box.global_position
-	spawn_pos.y = _table_y + 0.05
+	var spawn_pos := assembly_pivot.global_position
+	spawn_pos.y = _table_y + part._model_half_height + 0.05
 	part.global_position = spawn_pos
 	part.pick_up()
 	GameState.pick_up_part(part)
@@ -452,7 +524,6 @@ func _place_held_part(_mouse_pos: Vector2) -> void:
 		return
 
 	# Release the part at its current held position — gravity does the rest.
-	# No snapping to the table; the part falls naturally from wherever it is.
 	var drop_pos := part.global_position
 
 	# ── Place the primary part ───────────────────────────────────────────
@@ -462,23 +533,20 @@ func _place_held_part(_mouse_pos: Vector2) -> void:
 	var secondary := GameState.held_cluster.duplicate()
 	var cluster_joints := GameState.cluster_joints.duplicate()
 
-	for p: JunkPart in secondary:
+	for p: Node3D in secondary:
 		if not is_instance_valid(p):
 			continue
-		# Capture current world transform (set by _update_cluster_transforms)
 		var world_xform := p.global_transform
 
-		# Reparent to assembly_pivot
 		if p.get_parent() != assembly_pivot:
 			p.reparent(assembly_pivot, true)
 
-		# Restore placement state with full physics re-enable
 		p.global_transform = world_xform
 		p.is_held = false
 		p.is_placed = true
 		p.collision_layer = 2
 		p.collision_mask = 3
-		p.freeze = false   # let physics take over — settle naturally
+		p.freeze = false
 
 		GameState.register_assembly_part(p)
 
@@ -491,24 +559,17 @@ func _place_held_part(_mouse_pos: Vector2) -> void:
 	for joint: Joint3D in cluster_joints:
 		if not is_instance_valid(joint):
 			continue
-		# Reparent joint to assembly_pivot if needed
 		if joint.get_parent() != assembly_pivot:
 			joint.reparent(assembly_pivot, true)
-		# We need to find which bodies this joint originally connected.
-		# The joint was created by Nail._create_joint() or AttachmentSystem.
-		# We stored references are gone (paths were cleared), but the joint's
-		# position is at the midpoint of the two bodies it connects.
-		# We'll find the two nearest cluster parts to the joint's position.
 		var j_pos := joint.global_position
-		var all_cluster: Array[JunkPart] = [part as JunkPart]
+		var all_cluster: Array[Node3D] = [part as Node3D]
 		all_cluster.append_array(secondary)
-		var sorted_by_dist: Array[JunkPart] = []
+		var sorted_by_dist: Array[Node3D] = []
 		sorted_by_dist.append_array(all_cluster)
-		sorted_by_dist.sort_custom(func(a: JunkPart, b: JunkPart) -> bool:
+		sorted_by_dist.sort_custom(func(a: Node3D, b: Node3D) -> bool:
 			return a.global_position.distance_to(j_pos) < b.global_position.distance_to(j_pos)
 		)
 		if sorted_by_dist.size() >= 2:
-			# Use call_deferred for node path assignment so physics settles first
 			_deferred_assign_joint_paths(joint, sorted_by_dist[0], sorted_by_dist[1])
 
 	# ── Clean up cluster state ───────────────────────────────────────────
@@ -535,7 +596,7 @@ func _do_assign_joint_paths(joint: Joint3D, body_a: Node3D, body_b: Node3D) -> v
 			joint.node_b = joint.get_path_to(body_b)
 
 
-func _attach_part(part: JunkPart) -> void:
+func _attach_part(part: Node3D) -> void:
 	# In hand or empty mode, don't auto-create joints – parts stay separate
 	if GameState.active_tool == "none" or GameState.active_tool == "select" or GameState.active_tool == "hand":
 		return
@@ -562,6 +623,9 @@ func _update_box_hover() -> void:
 	var mouse_pos := get_viewport().get_mouse_position()
 	var new_hovered := _raycast_for_box(mouse_pos)
 
+	if GameState.active_tool != "none":
+		new_hovered = null
+
 	if new_hovered != _hovered_box:
 		if _hovered_box:
 			_hovered_box.highlight(false)
@@ -578,15 +642,22 @@ func _on_view_toggle_pressed() -> void:
 	if cc and cc.has_method("toggle_view"):
 		cc.toggle_view()
 
+## Tool toggle: clicking an active tool button a second time resets to "none".
 func _on_tape_pressed() -> void:
+	if GameState.held_part != null:
+		return
 	GameState.set_active_tool("none" if GameState.active_tool == "tape" else "tape")
 	_update_tool_buttons()
 
 func _on_nail_pressed() -> void:
+	if GameState.held_part != null:
+		return
 	GameState.set_active_tool("none" if GameState.active_tool == "nail" else "nail")
 	_update_tool_buttons()
 
 func _on_crowbar_pressed() -> void:
+	if GameState.held_part != null:
+		return
 	GameState.set_active_tool("none" if GameState.active_tool == "crowbar" else "crowbar")
 	_update_tool_buttons()
 
@@ -610,14 +681,15 @@ func _update_tool_buttons() -> void:
 			"nail":
 				nail_status_label.text = "Click on a part to place nail, then click nail to hammer"
 			"crowbar":
-				nail_status_label.text = "Click on a nail to pull it out"
+				nail_status_label.text = "Click on a nail or tape to remove it"
 			"tape":
-				nail_status_label.text = "Parts will be taped (wobbly) on placement"
+				nail_status_label.text = "Click two surface points to tape them together (wobbly)"
 			"none":
 				nail_status_label.text = "✋ Hand mode — parts drop freely (click tool to select)"
 			_:
 				nail_status_label.text = ""
 
+# ── TRUST ME evaluation ──────────────────────────────────────────────────────
 func _on_trust_me_pressed() -> void:
 	if _order == null or result_label == null:
 		return
@@ -631,6 +703,68 @@ func _on_trust_me_pressed() -> void:
 		result_label.text = "❌ Nothing is attached yet!\nGrab some junk from the boxes!"
 		return
 
+	# ── Silhouette Evaluation (if blueprint texture is assigned) ─────────
+	if _order.blueprint_silhouette != null:
+		_enter_eval_view()
+		return
+
+	# ── Fallback: Legacy spatial-tag evaluation ──────────────────────────
+	_run_legacy_evaluation()
+
+
+## Enter the orthographic evaluation view with silhouette overlay.
+func _enter_eval_view() -> void:
+	var cc = get_node_or_null("CameraController")
+	if cc == null or not cc.has_method("enter_eval_view"):
+		_run_legacy_evaluation()
+		return
+
+	# Switch camera to orthographic
+	var eval_cam: Camera3D = cc.enter_eval_view()
+	if eval_cam == null:
+		_run_legacy_evaluation()
+		return
+
+	# Show the silhouette overlay
+	if _silhouette_overlay and _order.blueprint_silhouette:
+		_silhouette_overlay.texture = _order.blueprint_silhouette
+		_silhouette_overlay.visible = true
+
+	# Show the back button
+	if _eval_back_btn:
+		_eval_back_btn.visible = true
+
+	# Run the silhouette evaluation after a brief delay (let camera settle)
+	await get_tree().create_timer(0.1).timeout
+	var sil_result = evaluation_system.evaluate_silhouette(eval_cam, _order, assembly_pivot)
+
+	var pct: int = sil_result["percentage"]
+	var passed: bool = sil_result["passed"]
+	var detail: String = sil_result["detail"]
+	var grade: String = evaluation_system.grade_label(pct)
+
+	if result_label:
+		result_label.text = "━━━ SILHOUETTE EVAL ━━━\n%s\n%s" % [grade, detail]
+		if passed:
+			result_label.text += "\n🎉 PASSED! You're a real engineer!"
+		else:
+			result_label.text += "\n🔧 Keep tweaking... (need %d%%)" % int(_order.pass_tolerance)
+
+
+## Exit the evaluation view and return to workspace.
+func _exit_eval_view() -> void:
+	if _silhouette_overlay:
+		_silhouette_overlay.visible = false
+	if _eval_back_btn:
+		_eval_back_btn.visible = false
+
+	var cc = get_node_or_null("CameraController")
+	if cc and cc.has_method("exit_eval_view"):
+		cc.exit_eval_view()
+
+
+## Legacy spatial-tag evaluation (fallback when no blueprint_silhouette).
+func _run_legacy_evaluation() -> void:
 	var eval_result := evaluation_system.evaluate(assembly_pivot, _order)
 	var pct: int    = eval_result["percentage"]
 	var grade: String = evaluation_system.grade_label(pct)
@@ -650,13 +784,17 @@ func _on_trust_me_pressed() -> void:
 			var dist: float = req["distance"]
 			detail += "%s [%s]: %.2fm away (%d/%d pts)\n" % [icon, tag, dist, earned, possible]
 
-	result_label.text = "━━━ EVALUATION ━━━\n%s\nScore: %d / %d (%d%%)\n\n%s" % [
-		grade, score, max_s, pct, detail
-	]
+	if result_label:
+		result_label.text = "━━━ EVALUATION ━━━\n%s\nScore: %d / %d (%d%%)\n\n%s" % [
+			grade, score, max_s, pct, detail
+		]
 
 func _on_reset_pressed() -> void:
+	# Exit eval view if active
+	_exit_eval_view()
+
 	# Free any cluster members currently held (reparented under Main)
-	for part: JunkPart in GameState.held_cluster:
+	for part: Node3D in GameState.held_cluster:
 		if is_instance_valid(part):
 			part.queue_free()
 	for joint: Joint3D in GameState.cluster_joints:
@@ -686,6 +824,8 @@ func _on_reset_pressed() -> void:
 
 # ── Nail tool signal handlers ─────────────────────────────────────────────────
 func _on_nail_placed(nail: Nail) -> void:
+	if not nail.nail_unfastened.is_connected(_on_nail_removed):
+		nail.nail_unfastened.connect(_on_nail_removed)
 	if nail_status_label:
 		nail_status_label.text = "🔨 Nail placed! Click it to hammer in (%d%%)" % int(nail.get_progress() * 100)
 
@@ -707,25 +847,7 @@ func _on_nail_driven(nail: Nail) -> void:
 	if nail_status_label:
 		nail_status_label.text = "✅ Nail fastened! Place another or switch tools."
 
-	# ── Make the ENTIRE nailed cluster ignore internal collisions ─────────
-	# Find all parts transitively connected via joints (the full cluster).
-	# Add collision exceptions between EVERY pair so the cluster behaves
-	# as a single solid object — no jittering even when thrown hard.
-	var root_body: JunkPart = null
-	if nail._surface_body is JunkPart:
-		root_body = nail._surface_body as JunkPart
-	elif nail._top_body is JunkPart:
-		root_body = nail._top_body as JunkPart
-
-	if root_body and assembly_pivot:
-		var cluster: Array[JunkPart] = attachment_system.get_connected_cluster(root_body, assembly_pivot)
-		# Add collision exception between every pair in the cluster
-		for i in range(cluster.size()):
-			for j in range(i + 1, cluster.size()):
-				var a: PhysicsBody3D = cluster[i] as PhysicsBody3D
-				var b: PhysicsBody3D = cluster[j] as PhysicsBody3D
-				a.add_collision_exception_with(b)
-				b.add_collision_exception_with(a)
+	call_deferred("_recalculate_assembly_collisions")
 
 func _on_nail_placement_blocked(reason: String) -> void:
 	if nail_status_label:
@@ -739,6 +861,7 @@ func _on_tape_started() -> void:
 func _on_tape_finished() -> void:
 	if nail_status_label:
 		nail_status_label.text = "✅ Taped! Place another or switch tools."
+	call_deferred("_recalculate_assembly_collisions")
 
 func _on_tape_canceled() -> void:
 	if nail_status_label:
@@ -750,22 +873,29 @@ func _on_tape_placement_blocked(reason: String) -> void:
 
 # ── GameState signal handlers ─────────────────────────────────────────────────
 func _on_camera_state_changed(new_state: String) -> void:
-	if new_state == "TABLE_VIEW" or new_state == "UNDER_TABLE_VIEW":
-		if GameState.is_playing():
-			ui_layer.visible = true
-	else:
-		ui_layer.visible = false
-		
 	if view_toggle_btn == null:
 		return
+		
 	if new_state == "TABLE_VIEW":
+		if GameState.is_playing():
+			_hud_root.visible = true
+			view_toggle_btn.visible = true
 		view_toggle_btn.text = "🔽 LOOK UNDER TABLE (Tab)"
-	else:
+	elif new_state == "UNDER_TABLE_VIEW":
+		if GameState.is_playing():
+			_hud_root.visible = false
+			view_toggle_btn.visible = true
 		view_toggle_btn.text = "🔼 BACK TO TABLE (Tab)"
+	elif new_state == "EVAL_VIEW":
+		_hud_root.visible = true
+		view_toggle_btn.visible = false
+	else:
+		_hud_root.visible = false
+		view_toggle_btn.visible = false
 
 func _on_part_picked_up(part: RigidBody3D) -> void:
 	if part_name_label and part is JunkPart:
-		var jp := part as JunkPart
+		var jp := part as Node3D
 		part_name_label.text = "Holding: %s [%s]" % [
 			jp.item_data.item_name if jp.item_data else "???",
 			", ".join(jp.tags)
@@ -787,6 +917,10 @@ func _make_panel(pos: Vector2, sz: Vector2) -> Panel:
 	style.border_color = Color(0.4, 0.35, 0.2, 1.0)
 	style.set_border_width_all(2)
 	style.set_corner_radius_all(6)
+	style.content_margin_left = 8
+	style.content_margin_top = 6
+	style.content_margin_right = 8
+	style.content_margin_bottom = 6
 	panel.add_theme_stylebox_override("panel", style)
 
 	return panel
@@ -820,3 +954,42 @@ func _make_button(txt: String, pos: Vector2, sz: Vector2) -> Button:
 	btn.add_theme_stylebox_override("pressed", style_pressed)
 
 	return btn
+
+func _on_nail_removed() -> void:
+	call_deferred("_recalculate_assembly_collisions")
+
+func _on_tape_removed() -> void:
+	call_deferred("_recalculate_assembly_collisions")
+
+func _recalculate_assembly_collisions() -> void:
+	if not assembly_pivot:
+		return
+		
+	var all_parts: Array[PhysicsBody3D] = []
+	for child in assembly_pivot.get_children():
+		if child is JunkPart:
+			all_parts.append(child as PhysicsBody3D)
+			
+	# 1. Clear all exceptions between assembly parts
+	for i in range(all_parts.size()):
+		for j in range(i + 1, all_parts.size()):
+			all_parts[i].remove_collision_exception_with(all_parts[j])
+			all_parts[j].remove_collision_exception_with(all_parts[i])
+			
+	# 2. Re-apply for actual connected clusters
+	var visited: Array[Node3D] = []
+	for part in all_parts:
+		if part in visited:
+			continue
+		var cluster: Array[Node3D] = attachment_system.get_connected_cluster(part, assembly_pivot)
+		for c in cluster:
+			if not c in visited:
+				visited.append(c)
+				
+		for i in range(cluster.size()):
+			for j in range(i + 1, cluster.size()):
+				var a := cluster[i] as PhysicsBody3D
+				var b := cluster[j] as PhysicsBody3D
+				if a and b:
+					a.add_collision_exception_with(b)
+					b.add_collision_exception_with(a)

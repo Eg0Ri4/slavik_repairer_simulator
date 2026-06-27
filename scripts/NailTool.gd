@@ -1,8 +1,11 @@
 ## NailTool.gd
-## Manages nail placement and hammering interaction.
+## Manages nail placement, hammering, and crowbar interactions.
 ## When active_tool == "nail":
 ##   - Left-click on a placed part → places a new Nail at the hit point
 ##   - Left-click on an existing nail head → strikes it (drives it deeper)
+## When active_tool == "crowbar":
+##   - Left-click on a nail head → pulls the nail outward
+##   - Left-click on a tape Area3D → removes the tape and joint
 ##
 ## Integrates with GameState for tool switching and Main.gd for UI.
 class_name NailTool
@@ -21,6 +24,7 @@ signal nail_strike_performed(progress: float)
 signal nail_fully_driven(nail: Nail)
 ## Emitted when nail placement is blocked.
 signal nail_placement_blocked(reason: String)
+signal tape_removed()
 
 # ── State ────────────────────────────────────────────────────────────────────
 ## Reference to the assembly pivot (set by Main.gd on setup).
@@ -39,7 +43,7 @@ func _physics_process(delta: float) -> void:
 		_strike_cooldown -= delta
 
 
-## Called by Main.gd when a left-click occurs and active_tool == "nail".
+## Called by Main.gd when a left-click occurs and active_tool == "nail" or "crowbar".
 ## Returns true if the click was consumed (hit a nail or placed one).
 func handle_click(mouse_pos: Vector2) -> bool:
 	if GameState.active_tool != "nail" and GameState.active_tool != "crowbar":
@@ -120,6 +124,7 @@ func _remove_tape(area: Area3D) -> void:
 	if is_instance_valid(mesh):
 		mesh.queue_free()
 		
+	tape_removed.emit()
 	# Trigger the UI feedback text for crowbar (it checks for 0 progress)
 	nail_strike_performed.emit(0.0)
 
@@ -135,7 +140,7 @@ func _place_nail(hit_result: Dictionary) -> void:
 	# Only place nails on placed JunkParts
 	if not (hit_collider is JunkPart):
 		return
-	var surface_part := hit_collider as JunkPart
+	var surface_part := hit_collider as Node3D
 	if not surface_part.is_placed:
 		return
 
@@ -148,8 +153,8 @@ func _place_nail(hit_result: Dictionary) -> void:
 	var nail := Nail.new()
 	nail.name = "Nail_%d" % (randi() % 99999)
 
-	# Find the nearest OTHER placed part to connect to (if any)
-	var top_body: Node3D = _find_nearest_other_part(surface_part, hit_point)
+	# Find the part under the nail (if it reaches deep enough)
+	var top_body: Node3D = _find_part_under_nail(surface_part, hit_point, hit_normal, nail.target_depth)
 	nail.setup(surface_part, top_body)
 
 	# Add to the assembly pivot
@@ -219,27 +224,25 @@ func _raycast_for_surface(origin: Vector3, direction: Vector3, space: PhysicsDir
 	return null
 
 
-func _find_nearest_other_part(exclude: JunkPart, near_pos: Vector3) -> JunkPart:
-	if assembly_pivot == null:
-		return null
-
-	var nearest: JunkPart = null
-	var nearest_dist: float = INF
-
-	for child in assembly_pivot.get_children():
-		if child is JunkPart and child != exclude and child.is_placed:
-			var d: float = child.global_position.distance_to(near_pos)
-			if d < nearest_dist:
-				nearest_dist = d
-				nearest = child
-
-	# Only connect if reasonably close (within 0.5m)
-	if nearest and nearest_dist < 0.5:
-		return nearest
+func _find_part_under_nail(exclude: Node3D, origin: Vector3, normal: Vector3, depth: float) -> Node3D:
+	var space := get_world_3d().direct_space_state
+	# Slightly offset origin inward to avoid hitting the absolute surface bounds weirdly
+	var start_pos = origin - normal * 0.001
+	var end_pos = origin - normal * depth
+	
+	var query := PhysicsRayQueryParameters3D.create(start_pos, end_pos)
+	query.collision_mask = 2 # placed parts
+	query.exclude = [exclude.get_rid()]
+	query.hit_from_inside = true
+	var result := space.intersect_ray(query)
+	
+	if result and result.collider is JunkPart and result.collider.is_placed:
+		return result.collider as Node3D
+		
 	return null
 
 
-func _is_nail_too_close(hit_point: Vector3, min_distance: float = 0.015) -> bool:
+func _is_nail_too_close(hit_point: Vector3, min_distance: float = 0.03) -> bool:
 	var nodes_to_check: Array[Node] = []
 	if assembly_pivot:
 		nodes_to_check = assembly_pivot.get_children()

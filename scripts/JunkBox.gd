@@ -6,9 +6,11 @@ extends StaticBody3D
 
 @export var box_color: Color = Color(0.55, 0.35, 0.15)
 @export var box_label: String = "Box A"
+@export_dir var mesh_folder_path: String = ""
 
 # Predefined pool of items this box can produce
 var _item_pool: Array[ItemData] = []
+var _mesh_files: Array[String] = []
 
 var _highlight_mat: StandardMaterial3D
 var _normal_mat: StandardMaterial3D
@@ -64,7 +66,23 @@ func _ready() -> void:
 	add_child(col)
 
 	if not Engine.is_editor_hint():
+		_scan_mesh_folder()
 		_populate_pool()
+
+func _scan_mesh_folder() -> void:
+	_mesh_files.clear()
+	if mesh_folder_path.is_empty():
+		return
+	var dir = DirAccess.open(mesh_folder_path)
+	if dir:
+		dir.list_dir_begin()
+		var file_name = dir.get_next()
+		while file_name != "":
+			if not dir.current_is_dir():
+				var ext = file_name.get_extension().to_lower()
+				if ext in ["glb", "gltf", "obj", "tscn", "scn"] and not file_name.ends_with(".import"):
+					_mesh_files.append(mesh_folder_path.path_join(file_name))
+			file_name = dir.get_next()
 
 func _populate_pool() -> void:
 	# Create several predefined ItemData resources at runtime
@@ -96,10 +114,15 @@ func highlight(on: bool) -> void:
 		else:
 			_mesh_inst.mesh.surface_set_material(0, _normal_mat)
 
-func extract_random_part() -> ItemData:
+func extract_random_part() -> Dictionary:
 	if _item_pool.is_empty():
-		return null
+		return {}
 	var idx: int = randi() % _item_pool.size()
 	var data: ItemData = _item_pool[idx]
+	
+	var model_path: String = ""
+	if _mesh_files.size() > 0:
+		model_path = _mesh_files[randi() % _mesh_files.size()]
+		
 	part_extracted.emit(data)
-	return data
+	return {"data": data, "model_path": model_path}

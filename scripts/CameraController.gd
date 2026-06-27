@@ -1,6 +1,7 @@
 ## CameraController.gd
 ## Две Camera3D как дочерние ноды: MenuCamera (current=true) и GameCamera.
 ## CameraController-нода сама НЕ двигается — твиним transform самих камер.
+## Supports TABLE_VIEW, UNDER_TABLE_VIEW, and EVAL_VIEW (orthographic).
 extends Node3D
 
 const MENU_CAM_NAME := "MenuCamera"
@@ -12,6 +13,11 @@ const GAME_CAM_NAME := "GameCamera"
 
 @export var under_table_position : Vector3 = Vector3(0.448, -0.316, -1.389)
 @export var under_table_rotation : Vector3 = Vector3(-7.0, -3.64, -41.9)
+
+## Orthographic evaluation view: camera looks straight down at the workbench.
+@export var eval_ortho_position : Vector3 = Vector3(0.0, 2.0, 0.0)
+@export var eval_ortho_rotation : Vector3 = Vector3(-90.0, 0.0, 0.0)
+@export var eval_ortho_size     : float = 1.5
 
 var _menu_cam  : Camera3D = null
 var _game_cam  : Camera3D = null
@@ -25,6 +31,9 @@ var _last_mouse  : Vector2 = Vector2.ZERO
 
 var _game_cam_local_pos : Vector3
 var _game_cam_local_rot : Vector3
+## Store original projection so we can restore it after evaluation
+var _game_cam_was_perspective: bool = true
+var _game_cam_original_fov: float = 60.0
 
 func _ready() -> void:
 	_menu_cam = get_node_or_null(MENU_CAM_NAME)
@@ -40,6 +49,7 @@ func _ready() -> void:
 	# Запоминаем родную позицию GameCamera (TABLE_VIEW) — берём из сцены
 	_game_cam_local_pos = _game_cam.position
 	_game_cam_local_rot = _game_cam.rotation_degrees
+	_game_cam_original_fov = _game_cam.fov
 
 	_pivot = get_node_or_null("../AssemblyPivot")
 
@@ -87,11 +97,7 @@ func _input(event: InputEvent) -> void:
 		if event.pressed:
 			_last_mouse = event.position
 	elif event is InputEventMouseMotion and _rmb_down:
-		if _pivot:
-			var d: Vector2 = event.position - _last_mouse
-			_last_mouse = event.position
-			_pivot.rotate_y(deg_to_rad(-d.x * pivot_sensitivity))
-			_pivot.rotate_x(deg_to_rad(-d.y * pivot_sensitivity * 0.5))
+		pass # Orbit assembly disabled per user request
 
 # ── game_started ─────────────────────────────────────────────────────────────
 func _on_game_started() -> void:
@@ -190,3 +196,44 @@ func _tween_view(new_state: String) -> void:
 	tw.tween_property(_game_cam, "position",         tgt_pos, view_tween_duration)
 	tw.tween_property(_game_cam, "rotation_degrees", tgt_rot, view_tween_duration)
 	tw.finished.connect(func() -> void: _is_tweening = false, CONNECT_ONE_SHOT)
+
+
+# ── Orthographic Evaluation View ─────────────────────────────────────────────
+
+## Switches to an orthographic projection facing straight down at the workbench.
+## Used by the silhouette evaluation system. Returns the Camera3D for raycasting.
+func enter_eval_view() -> Camera3D:
+	if _game_cam == null:
+		return null
+	if _current_tween and _current_tween.is_valid():
+		_current_tween.kill()
+
+	# Store the current projection state so we can restore later
+	_game_cam_was_perspective = (_game_cam.projection == Camera3D.PROJECTION_PERSPECTIVE)
+
+	# Switch to orthographic projection
+	_game_cam.projection = Camera3D.PROJECTION_ORTHOGONAL
+	_game_cam.size = eval_ortho_size
+
+	# Position camera looking straight down at the workbench center
+	_game_cam.position = eval_ortho_position
+	_game_cam.rotation_degrees = eval_ortho_rotation
+
+	_game_cam.current = true
+	GameState.set_camera_state("EVAL_VIEW")
+
+	return _game_cam
+
+## Restores the camera back to its previous perspective TABLE_VIEW state.
+func exit_eval_view() -> void:
+	if _game_cam == null:
+		return
+
+	# Restore perspective projection
+	_game_cam.projection = Camera3D.PROJECTION_PERSPECTIVE
+	_game_cam.fov = _game_cam_original_fov
+
+	# Tween back to table view
+	_game_cam.position = _game_cam_local_pos
+	_game_cam.rotation_degrees = _game_cam_local_rot
+	GameState.set_camera_state("TABLE_VIEW")

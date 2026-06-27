@@ -2,12 +2,25 @@
 class_name OrderData
 extends Resource
 
-## Human-readable name for this order/repair job
-@export var order_name: String = "Broken Fan"
+## ── Toy Identity ────────────────────────────────────────────────────────────
+## Human-readable name for this toy/repair job (shown as order title)
+@export var toy_name: String = "Broken Fan"
 
-## Description shown to player
-@export var description: String = "Fix this thing with junk!"
+## Flavor text describing the client's request
+@export_multiline var client_description: String = "Fix this thing with junk!"
 
+## ── Blueprint Silhouette ────────────────────────────────────────────────────
+## Semi-transparent 2D texture overlaid on the viewport during evaluation.
+## The EvaluationSystem raycasts through opaque pixels to score alignment.
+@export var blueprint_silhouette: Texture2D = null
+
+## Tags that a JunkPart must carry for a ray-hit to count as a valid match.
+@export var required_component_tags: Array[String] = ["blade", "motor", "frame"]
+
+## Minimum percentage (0-100) of matching score required to pass evaluation.
+@export var pass_tolerance: float = 80.0
+
+## ── Legacy Requirements (kept for backward compatibility) ───────────────────
 ## Array of target requirements.
 ## Each dict must have:
 ##   required_tag: String  - the tag a part must have
@@ -31,5 +44,5 @@ extends Resource
 	}
 ]
 
-## Maximum distance in units for a tag to count as "in position"
+## Maximum distance in units for a tag to count as "in position" (legacy eval)
 @export var tolerance: float = 0.5

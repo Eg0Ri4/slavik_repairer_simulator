@@ -1,5 +1,5 @@
 ## TapeTool.gd
-## Manages 2-click procedural wobbly tape placement.
+## Manages 2-click procedural wobbly tape placement with ghost preview.
 class_name TapeTool
 extends Node3D
 
@@ -20,13 +20,14 @@ var _start_normal: Vector3 = Vector3.UP
 var _preview_mesh: MeshInstance3D = null
 
 func _ready() -> void:
+	# Build ghost preview mesh — visible during tape placement
 	_preview_mesh = MeshInstance3D.new()
 	var m = BoxMesh.new()
 	m.size = Vector3(0.04, 0.005, 1.0)
 	var mat = StandardMaterial3D.new()
 	mat.albedo_color = Color(0.8, 0.8, 0.75, 0.6)
 	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	mat.flags_unshaded = true
+	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	m.surface_set_material(0, mat)
 	_preview_mesh.mesh = m
 	_preview_mesh.visible = false
@@ -67,6 +68,9 @@ func cancel() -> void:
 		_preview_mesh.visible = false
 		tape_canceled.emit()
 
+## Update ghost preview every frame to track mouse raycast target (P2).
+## The preview dynamically mirrors the rotation and scale to always
+## point from P1 to the current mouse surface hit.
 func _process(_delta: float) -> void:
 	if GameState.active_tool != "tape" and _is_placing:
 		cancel()
@@ -119,6 +123,8 @@ func _finish_tape(hit: Dictionary) -> void:
 	_preview_mesh.visible = false
 	tape_finished.emit()
 
+## Update preview mesh position, rotation, and scale to stretch from P1 to P2.
+## Clamped so it never disappears or clips out of bounds.
 func _update_preview(p1: Vector3, p2: Vector3) -> void:
 	if not _preview_mesh: return
 	_preview_mesh.visible = true

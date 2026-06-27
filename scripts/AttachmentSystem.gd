@@ -7,44 +7,51 @@
 class_name AttachmentSystem
 extends Node
 
-func attach(new_part: JunkPart, assembly_pivot: Node3D) -> Joint3D:
-	var nearest: JunkPart = _find_nearest_placed(new_part, assembly_pivot)
+func attach(new_part: Node3D, assembly_pivot: Node3D) -> Joint3D:
+	var nearest: Node3D = _find_nearest_placed(new_part, assembly_pivot)
 	return _create_bolt_joint(new_part, nearest, assembly_pivot)
 
 func create_manual_tape_joint(body1: Node3D, pos1: Vector3, norm1: Vector3, body2: Node3D, pos2: Vector3, norm2: Vector3, pivot: Node3D) -> Joint3D:
 	var joint := Generic6DOFJoint3D.new()
 
-	# Make it springy/wobbly on its axes
-	joint.set_param_x(Generic6DOFJoint3D.PARAM_LINEAR_SPRING_STIFFNESS, 15.0)
-	joint.set_param_x(Generic6DOFJoint3D.PARAM_LINEAR_SPRING_DAMPING, 1.0)
-	joint.set_flag_x(Generic6DOFJoint3D.FLAG_ENABLE_LINEAR_SPRING, true)
+	# Tape is a completely rigid connection.
+	for axis in range(3):
+		joint.set_flag_x(Generic6DOFJoint3D.FLAG_ENABLE_LINEAR_LIMIT if axis == 0 else (Generic6DOFJoint3D.FLAG_ENABLE_LINEAR_LIMIT if axis == 1 else Generic6DOFJoint3D.FLAG_ENABLE_LINEAR_LIMIT), true) # actually, Godot flags are per axis but accessible via set_flag_x/y/z
 	
-	joint.set_param_y(Generic6DOFJoint3D.PARAM_LINEAR_SPRING_STIFFNESS, 15.0)
-	joint.set_param_y(Generic6DOFJoint3D.PARAM_LINEAR_SPRING_DAMPING, 1.0)
-	joint.set_flag_y(Generic6DOFJoint3D.FLAG_ENABLE_LINEAR_SPRING, true)
+	# Actually, to make it clean:
+	# Linear limits (lock all axes at distance 0)
+	joint.set_flag_x(Generic6DOFJoint3D.FLAG_ENABLE_LINEAR_LIMIT, true)
+	joint.set_param_x(Generic6DOFJoint3D.PARAM_LINEAR_LOWER_LIMIT, 0.0)
+	joint.set_param_x(Generic6DOFJoint3D.PARAM_LINEAR_UPPER_LIMIT, 0.0)
 	
-	joint.set_param_z(Generic6DOFJoint3D.PARAM_LINEAR_SPRING_STIFFNESS, 15.0)
-	joint.set_param_z(Generic6DOFJoint3D.PARAM_LINEAR_SPRING_DAMPING, 1.0)
-	joint.set_flag_z(Generic6DOFJoint3D.FLAG_ENABLE_LINEAR_SPRING, true)
-
-	joint.set_param_x(Generic6DOFJoint3D.PARAM_ANGULAR_SPRING_STIFFNESS, 15.0)
-	joint.set_param_x(Generic6DOFJoint3D.PARAM_ANGULAR_SPRING_DAMPING, 1.0)
-	joint.set_flag_x(Generic6DOFJoint3D.FLAG_ENABLE_ANGULAR_SPRING, true)
+	joint.set_flag_y(Generic6DOFJoint3D.FLAG_ENABLE_LINEAR_LIMIT, true)
+	joint.set_param_y(Generic6DOFJoint3D.PARAM_LINEAR_LOWER_LIMIT, 0.0)
+	joint.set_param_y(Generic6DOFJoint3D.PARAM_LINEAR_UPPER_LIMIT, 0.0)
 	
-	joint.set_param_y(Generic6DOFJoint3D.PARAM_ANGULAR_SPRING_STIFFNESS, 15.0)
-	joint.set_param_y(Generic6DOFJoint3D.PARAM_ANGULAR_SPRING_DAMPING, 1.0)
-	joint.set_flag_y(Generic6DOFJoint3D.FLAG_ENABLE_ANGULAR_SPRING, true)
+	joint.set_flag_z(Generic6DOFJoint3D.FLAG_ENABLE_LINEAR_LIMIT, true)
+	joint.set_param_z(Generic6DOFJoint3D.PARAM_LINEAR_LOWER_LIMIT, 0.0)
+	joint.set_param_z(Generic6DOFJoint3D.PARAM_LINEAR_UPPER_LIMIT, 0.0)
+	
+	# Angular limits (lock all rotations at angle 0)
+	joint.set_flag_x(Generic6DOFJoint3D.FLAG_ENABLE_ANGULAR_LIMIT, true)
+	joint.set_param_x(Generic6DOFJoint3D.PARAM_ANGULAR_LOWER_LIMIT, 0.0)
+	joint.set_param_x(Generic6DOFJoint3D.PARAM_ANGULAR_UPPER_LIMIT, 0.0)
+	
+	joint.set_flag_y(Generic6DOFJoint3D.FLAG_ENABLE_ANGULAR_LIMIT, true)
+	joint.set_param_y(Generic6DOFJoint3D.PARAM_ANGULAR_LOWER_LIMIT, 0.0)
+	joint.set_param_y(Generic6DOFJoint3D.PARAM_ANGULAR_UPPER_LIMIT, 0.0)
+	
+	joint.set_flag_z(Generic6DOFJoint3D.FLAG_ENABLE_ANGULAR_LIMIT, true)
+	joint.set_param_z(Generic6DOFJoint3D.PARAM_ANGULAR_LOWER_LIMIT, 0.0)
+	joint.set_param_z(Generic6DOFJoint3D.PARAM_ANGULAR_UPPER_LIMIT, 0.0)
 
-	joint.set_param_z(Generic6DOFJoint3D.PARAM_ANGULAR_SPRING_STIFFNESS, 15.0)
-	joint.set_param_z(Generic6DOFJoint3D.PARAM_ANGULAR_SPRING_DAMPING, 1.0)
-	joint.set_flag_z(Generic6DOFJoint3D.FLAG_ENABLE_ANGULAR_SPRING, true)
-
+	# ── Add joint to tree FIRST, then assign paths (lifecycle safety) ────
 	pivot.add_child(joint)
 	joint.global_position = (pos1 + pos2) * 0.5
 	
 	_assign_paths_deferred.call_deferred(joint, body2, body1)
 
-	# Procedural Visual Mesh with Segmentation and V-Ends
+	# ── Procedural Visual Mesh with Segmentation and V-Ends ──────────────
 	var mesh_inst = MeshInstance3D.new()
 	var mesh = ImmediateMesh.new()
 	var mat = StandardMaterial3D.new()
@@ -86,10 +93,11 @@ func create_manual_tape_joint(body1: Node3D, pos1: Vector3, norm1: Vector3, body
 			pt = hit["position"]
 			n = hit["normal"]
 			
+		# Tiny normal offset (0.005m) to keep tape flush against mesh textures
 		pts.append(pt + n * 0.005)
 		normals.append(n)
 		
-	# Draw mesh
+	# Draw mesh with V-notched terminal segments
 	mesh.clear_surfaces()
 	mesh.surface_begin(Mesh.PRIMITIVE_TRIANGLES)
 	
@@ -115,6 +123,7 @@ func create_manual_tape_joint(body1: Node3D, pos1: Vector3, norm1: Vector3, body
 		var left1 = p1 - r1 * (width * 0.5)
 		var right1 = p1 + r1 * (width * 0.5)
 		
+		# V-notched torn edge at start (P1 terminal)
 		if i == 0:
 			var mid0 = p0 + f0 * 0.015
 			mesh.surface_add_vertex(left0)
@@ -128,6 +137,7 @@ func create_manual_tape_joint(body1: Node3D, pos1: Vector3, norm1: Vector3, body
 			mesh.surface_add_vertex(right1)
 			mesh.surface_add_vertex(mid0)
 			mesh.surface_add_vertex(right0)
+		# V-notched torn edge at end (P2 terminal)
 		elif i == segments - 1:
 			var mid1 = p1 - f1 * 0.015
 			mesh.surface_add_vertex(left0)
@@ -142,6 +152,7 @@ func create_manual_tape_joint(body1: Node3D, pos1: Vector3, norm1: Vector3, body
 			mesh.surface_add_vertex(right1)
 			mesh.surface_add_vertex(mid1)
 		else:
+			# Regular flat quad segment
 			mesh.surface_add_vertex(left0)
 			mesh.surface_add_vertex(right0)
 			mesh.surface_add_vertex(left1)
@@ -210,9 +221,9 @@ func _assign_paths_deferred(joint: Joint3D, new_part: Node3D, anchor: Node3D) ->
 
 ## Perform a BFS/flood-fill through all Joint3D nodes under `search_root` to
 ## find every JunkPart that is transitively connected to `root_part` via joints.
-## Returns an Array[JunkPart] that always includes `root_part` as the first element.
+## Returns an Array[Node3D] that always includes `root_part` as the first element.
 ## If `root_part` has no joints, returns [root_part] (a single-element cluster).
-func get_connected_cluster(root_part: JunkPart, search_root: Node3D) -> Array[JunkPart]:
+func get_connected_cluster(root_part: Node3D, search_root: Node3D) -> Array[Node3D]:
 	# Collect all Joint3D nodes and build an adjacency map:  RID → Array[RID]
 	# We key by RID to avoid identity issues and get O(1) lookups.
 	var body_to_parts: Dictionary = {}   # RID → JunkPart
@@ -233,7 +244,7 @@ func get_connected_cluster(root_part: JunkPart, search_root: Node3D) -> Array[Ju
 		_collect_joints_recursive(scene_root, body_to_parts, adjacency)
 
 	# BFS from root_part
-	var root_rid := root_part.get_rid()
+	var root_rid: RID = root_part.get_rid()
 	var visited: Dictionary = {}   # RID → true
 	var queue: Array[RID] = [root_rid]
 	visited[root_rid] = true
@@ -247,19 +258,19 @@ func get_connected_cluster(root_part: JunkPart, search_root: Node3D) -> Array[Ju
 					queue.push_back(neighbor_rid)
 
 	# Build result — root_part first, then the rest
-	var cluster: Array[JunkPart] = [root_part]
+	var cluster: Array[Node3D] = [root_part]
 	for rid: RID in visited:
 		if rid != root_rid and rid in body_to_parts:
-			cluster.append(body_to_parts[rid] as JunkPart)
+			cluster.append(body_to_parts[rid] as Node3D)
 
 	return cluster
 
 
 ## Return all Joint3D nodes that connect members of the given cluster.
 ## Useful for temporarily disabling/enabling joints during compound movement.
-func get_joints_in_cluster(cluster: Array[JunkPart], search_root: Node3D) -> Array[Joint3D]:
+func get_joints_in_cluster(cluster: Array[Node3D], search_root: Node3D) -> Array[Joint3D]:
 	var cluster_rids: Dictionary = {}
-	for part: JunkPart in cluster:
+	for part: Node3D in cluster:
 		cluster_rids[part.get_rid()] = true
 
 	var joints: Array[Joint3D] = []
@@ -287,6 +298,8 @@ func _collect_joints_recursive(node: Node, body_to_parts: Dictionary, adjacency:
 	for child in node.get_children():
 		if child is Joint3D:
 			var joint := child as Joint3D
+			if joint.is_queued_for_deletion():
+				continue
 			var body_a: PhysicsBody3D = joint.get_node_or_null(joint.node_a) if joint.node_a else null
 			var body_b: PhysicsBody3D = joint.get_node_or_null(joint.node_b) if joint.node_b else null
 
@@ -311,6 +324,8 @@ func _find_cluster_joints_recursive(node: Node, cluster_rids: Dictionary, joints
 	for child in node.get_children():
 		if child is Joint3D:
 			var joint := child as Joint3D
+			if joint.is_queued_for_deletion():
+				continue
 			var body_a: PhysicsBody3D = joint.get_node_or_null(joint.node_a) if joint.node_a else null
 			var body_b: PhysicsBody3D = joint.get_node_or_null(joint.node_b) if joint.node_b else null
 
@@ -324,8 +339,8 @@ func _find_cluster_joints_recursive(node: Node, cluster_rids: Dictionary, joints
 
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
-func _find_nearest_placed(new_part: JunkPart, pivot: Node3D) -> JunkPart:
-	var nearest: JunkPart = null
+func _find_nearest_placed(new_part: Node3D, pivot: Node3D) -> Node3D:
+	var nearest: Node3D = null
 	var nearest_dist: float = INF
 
 	for child in pivot.get_children():

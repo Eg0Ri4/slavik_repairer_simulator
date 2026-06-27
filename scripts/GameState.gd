@@ -28,8 +28,10 @@ var assembly_parts: Array[Node3D] = []
 var current_order: OrderData = null
 
 # ── Compound Cluster State ───────────────────────────────────────────────────
+## CRITICAL: These MUST be initialized here at declaration so they exist
+## regardless of how scenes are launched from the editor.
 ## Secondary parts in the cluster (excludes the primary held_part).
-var held_cluster: Array[JunkPart] = []
+var held_cluster: Array[Node3D] = []
 ## Transform offset of each cluster member relative to the primary part at pick-up time.
 ## Keyed by the JunkPart instance (object identity).
 var cluster_offsets: Dictionary = {}   # JunkPart → Transform3D
@@ -60,13 +62,13 @@ func place_part() -> void:
 ## `primary` is the part the player clicked — it's stored in held_part separately.
 ## `secondary_parts` are the other connected parts (excluding primary).
 ## `joints` are the Joint3D nodes connecting cluster members.
-func pick_up_cluster(primary: JunkPart, secondary_parts: Array[JunkPart], joints: Array[Joint3D]) -> void:
+func pick_up_cluster(primary: Node3D, secondary_parts: Array[Node3D], joints: Array[Joint3D]) -> void:
 	held_cluster = secondary_parts
 	cluster_joints = joints
 	cluster_offsets.clear()
 
 	var primary_inv: Transform3D = primary.global_transform.affine_inverse()
-	for part: JunkPart in secondary_parts:
+	for part: Node3D in secondary_parts:
 		# Store each part's transform relative to the primary
 		cluster_offsets[part] = primary_inv * part.global_transform
 
