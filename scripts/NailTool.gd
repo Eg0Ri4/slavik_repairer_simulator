@@ -19,6 +19,8 @@ signal nail_placed(nail: Nail)
 signal nail_strike_performed(progress: float)
 ## Emitted when a nail is fully driven.
 signal nail_fully_driven(nail: Nail)
+## Emitted when nail placement is blocked.
+signal nail_placement_blocked(reason: String)
 
 # ── State ────────────────────────────────────────────────────────────────────
 ## Reference to the assembly pivot (set by Main.gd on setup).
@@ -58,7 +60,10 @@ func handle_click(mouse_pos: Vector2) -> bool:
 	# ── Step 1: Check if we clicked an existing nail head ────────────────
 	var nail_hit = _raycast_for_nail(origin, direction, space)
 	if nail_hit:
-		_strike_nail(nail_hit)
+		if not nail_hit.is_fastened():
+			_strike_nail(nail_hit)
+		else:
+			nail_placement_blocked.emit("Nail is already fully driven!")
 		return true
 
 	# ── Step 2: Check if we clicked a placed part surface ────────────────
@@ -95,6 +100,11 @@ func _place_nail(hit_result: Dictionary) -> void:
 		return
 	var surface_part := hit_collider as JunkPart
 	if not surface_part.is_placed:
+		return
+
+	# Check if another nail is already placed too close to this spot
+	if _is_nail_too_close(hit_point):
+		nail_placement_blocked.emit("Too close to another nail!")
 		return
 
 	# Create the nail
@@ -155,7 +165,7 @@ func _raycast_for_nail(origin: Vector3, direction: Vector3, space: PhysicsDirect
 	if result and result.collider is Area3D:
 		var area := result.collider as Area3D
 		var parent := area.get_parent()
-		if parent is Nail and not (parent as Nail).is_fastened():
+		if parent is Nail:
 			return parent as Nail
 
 	return null
@@ -194,3 +204,24 @@ func _find_nearest_other_part(exclude: JunkPart, near_pos: Vector3) -> JunkPart:
 	if nearest and nearest_dist < 0.5:
 		return nearest
 	return null
+
+
+func _is_nail_too_close(hit_point: Vector3, min_distance: float = 0.03) -> bool:
+	var nodes_to_check: Array[Node] = []
+	if assembly_pivot:
+		nodes_to_check = assembly_pivot.get_children()
+	elif get_tree() and get_tree().current_scene:
+		nodes_to_check = get_tree().current_scene.get_children()
+
+	for child in nodes_to_check:
+		if child is Nail:
+			var nail_node := child as Nail
+			# Calculate the nail's entry point on the surface
+			var nail_basis_y: Vector3 = nail_node.global_basis.y.normalized()
+			var remaining_depth: float = nail_node.target_depth * (1.0 - nail_node.get_progress())
+			var entry_point: Vector3 = nail_node.global_position - nail_basis_y * remaining_depth
+
+			if entry_point.distance_to(hit_point) < min_distance:
+				return true
+
+	return false

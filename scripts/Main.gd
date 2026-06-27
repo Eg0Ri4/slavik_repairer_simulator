@@ -17,7 +17,6 @@ var boxes: Array[JunkBox] = []
 # UI references
 var ui_layer: CanvasLayer
 var tool_tape_btn: Button
-var tool_bolts_btn: Button
 var tool_nail_btn: Button
 var trust_me_btn: Button
 var result_label: Label
@@ -84,6 +83,7 @@ func _build_systems() -> void:
 	nail_tool.nail_placed.connect(_on_nail_placed)
 	nail_tool.nail_strike_performed.connect(_on_nail_strike)
 	nail_tool.nail_fully_driven.connect(_on_nail_driven)
+	nail_tool.nail_placement_blocked.connect(_on_nail_placement_blocked)
 
 func _build_ui() -> void:
 	ui_layer = CanvasLayer.new()
@@ -148,11 +148,6 @@ func _build_ui() -> void:
 	var tool_hbox := HBoxContainer.new()
 	tool_hbox.add_theme_constant_override("separation", 8)
 	tool_vbox.add_child(tool_hbox)
-
-	tool_bolts_btn = _make_button("🔩 BOLTS (Rigid)", Vector2.ZERO, Vector2(140, 32))
-	tool_bolts_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	tool_bolts_btn.pressed.connect(_on_bolts_pressed)
-	tool_hbox.add_child(tool_bolts_btn)
 
 	tool_tape_btn = _make_button("📎 TAPE (Wobbly)", Vector2.ZERO, Vector2(140, 32))
 	tool_tape_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -383,10 +378,6 @@ func _on_view_toggle_pressed() -> void:
 	if cc and cc.has_method("toggle_view"):
 		cc.toggle_view()
 
-func _on_bolts_pressed() -> void:
-	GameState.set_active_tool("bolts")
-	_update_tool_buttons()
-
 func _on_tape_pressed() -> void:
 	GameState.set_active_tool("tape")
 	_update_tool_buttons()
@@ -396,12 +387,11 @@ func _on_nail_pressed() -> void:
 	_update_tool_buttons()
 
 func _update_tool_buttons() -> void:
-	if tool_bolts_btn == null or tool_tape_btn == null or tool_nail_btn == null:
+	if tool_tape_btn == null or tool_nail_btn == null:
 		return
 	var active := GameState.active_tool
 	var active_color := Color(1.0, 0.9, 0.3)
 	var inactive_color := Color(0.75, 0.75, 0.75)
-	tool_bolts_btn.modulate = active_color if active == "bolts" else inactive_color
 	tool_tape_btn.modulate  = active_color if active == "tape"  else inactive_color
 	tool_nail_btn.modulate  = active_color if active == "nail"  else inactive_color
 
@@ -486,6 +476,10 @@ func _on_nail_strike(progress: float) -> void:
 func _on_nail_driven(_nail: Nail) -> void:
 	if nail_status_label:
 		nail_status_label.text = "✅ Nail fastened! Place another or switch tools."
+
+func _on_nail_placement_blocked(reason: String) -> void:
+	if nail_status_label:
+		nail_status_label.text = "⚠️ %s" % reason
 
 # ── GameState signal handlers ─────────────────────────────────────────────────
 func _on_camera_state_changed(new_state: String) -> void:

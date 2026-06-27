@@ -111,11 +111,6 @@ func _fasten() -> void:
 	if _surface_body and _top_body:
 		_create_joint()
 
-	# Disable the head area so it can't be struck again
-	if _head_area:
-		_head_area.set_deferred("monitoring", false)
-		_head_area.set_deferred("monitorable", false)
-
 	nail_fastened.emit()
 
 

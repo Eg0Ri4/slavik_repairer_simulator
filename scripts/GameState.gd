@@ -1,8 +1,8 @@
 ## GameState - Autoload singleton for global game state
 extends Node
 
-## Current tool: "bolts", "tape", or "nail"
-var active_tool: String = "bolts"
+## Current tool: "tape" or "nail"
+var active_tool: String = "tape"
 
 ## The part currently being held/dragged
 var held_part: RigidBody3D = null
