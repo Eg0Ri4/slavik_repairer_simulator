@@ -219,7 +219,7 @@ func _find_nearest_other_part(exclude: JunkPart, near_pos: Vector3) -> JunkPart:
 	return null
 
 
-func _is_nail_too_close(hit_point: Vector3, min_distance: float = 0.03) -> bool:
+func _is_nail_too_close(hit_point: Vector3, min_distance: float = 0.015) -> bool:
 	var nodes_to_check: Array[Node] = []
 	if assembly_pivot:
 		nodes_to_check = assembly_pivot.get_children()
