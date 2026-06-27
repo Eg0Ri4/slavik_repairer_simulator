@@ -41,7 +41,7 @@ far = 100.0
 transform = Transform3D(0.943886, 0, 0.330273, 0, 1, 0, -0.330273, 0, 0.943886, -0.53302, -0.19935, -0.60585)
 
 [node name="TableStaticBody" type="StaticBody3D" parent="." unique_id=1352924510]
-transform = Transform3D(-0.14853762, 0, 0.47742704, 0, 0.5, 0, -0.47742704, 0, -0.14853762, 0.04834944, 0.15910655, 0.14620882)
+transform = Transform3D(-0.14853762, 0, 0.47742704, 0, 0.5, 0, -0.47742704, 0, -0.14853762, 0.22535664, 0.15910655, 0.14620882)
 collision_mask = 0
 
 [node name="CollisionShape3D" type="CollisionShape3D" parent="TableStaticBody" unique_id=2059977477]

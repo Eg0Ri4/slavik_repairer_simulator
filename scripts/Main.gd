@@ -10,6 +10,7 @@ var table: Node3D
 var attachment_system: AttachmentSystem
 var evaluation_system: EvaluationSystem
 var nail_tool: NailTool
+var tape_tool: TapeTool
 
 # Under-table boxes
 var boxes: Array[JunkBox] = []
@@ -18,6 +19,8 @@ var boxes: Array[JunkBox] = []
 var ui_layer: CanvasLayer
 var tool_tape_btn: Button
 var tool_nail_btn: Button
+var tool_crowbar_btn: Button
+var tool_clear_btn: Button
 var trust_me_btn: Button
 var result_label: Label
 var held_label: Label
@@ -77,6 +80,17 @@ func _build_systems() -> void:
 	nail_tool.nail_strike_performed.connect(_on_nail_strike)
 	nail_tool.nail_fully_driven.connect(_on_nail_driven)
 	nail_tool.nail_placement_blocked.connect(_on_nail_placement_blocked)
+
+	tape_tool = TapeTool.new()
+	tape_tool.name = "TapeTool"
+	tape_tool.assembly_pivot = assembly_pivot
+	tape_tool.attachment_system = attachment_system
+	add_child(tape_tool)
+	
+	tape_tool.tape_started.connect(_on_tape_started)
+	tape_tool.tape_finished.connect(_on_tape_finished)
+	tape_tool.tape_canceled.connect(_on_tape_canceled)
+	tape_tool.tape_placement_blocked.connect(_on_tape_placement_blocked)
 
 func _build_ui() -> void:
 	ui_layer = CanvasLayer.new()
@@ -144,10 +158,20 @@ func _build_ui() -> void:
 	tool_tape_btn.pressed.connect(_on_tape_pressed)
 	tool_hbox.add_child(tool_tape_btn)
 
-	tool_nail_btn = _make_button("🔨 NAIL", Vector2.ZERO, Vector2(100, 32))
+	tool_nail_btn = _make_button("🔨 NAIL", Vector2.ZERO, Vector2(90, 32))
 	tool_nail_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	tool_nail_btn.pressed.connect(_on_nail_pressed)
 	tool_hbox.add_child(tool_nail_btn)
+
+	tool_crowbar_btn = _make_button("🪝 CROWBAR", Vector2.ZERO, Vector2(100, 32))
+	tool_crowbar_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	tool_crowbar_btn.pressed.connect(_on_crowbar_pressed)
+	tool_hbox.add_child(tool_crowbar_btn)
+
+	tool_clear_btn = _make_button("❌ CLEAR", Vector2.ZERO, Vector2(80, 32))
+	tool_clear_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	tool_clear_btn.pressed.connect(_on_clear_pressed)
+	tool_hbox.add_child(tool_clear_btn)
 
 	nail_status_label = Label.new()
 	nail_status_label.name = "NailStatus"
@@ -213,6 +237,9 @@ func _input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and not event.is_echo():
 		if event.keycode == KEY_TAB:
 			_on_view_toggle_pressed()
+		elif event.keycode == KEY_ESCAPE:
+			GameState.set_active_tool("none")
+			_update_tool_buttons()
 
 	if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
 		_handle_left_click(event.position)
@@ -230,7 +257,11 @@ func _handle_left_click(mouse_pos: Vector2) -> void:
 				_place_held_part(mouse_pos)
 			else:
 				# ── Priority 1: nail tool intercept ──────────────────────────
-				if GameState.active_tool == "nail" and nail_tool.handle_click(mouse_pos):
+				if (GameState.active_tool == "nail" or GameState.active_tool == "crowbar") and nail_tool.handle_click(mouse_pos):
+					return
+					
+				# ── Priority 1.5: tape tool intercept ────────────────────────
+				if GameState.active_tool == "tape" and tape_tool.handle_click(mouse_pos):
 					return
 
 				# ── Priority 2: pick up an existing loose JunkPart ───────────
@@ -527,6 +558,9 @@ func _do_assign_joint_paths(joint: Joint3D, body_a: Node3D, body_b: Node3D) -> v
 
 
 func _attach_part(part: JunkPart) -> void:
+	if GameState.active_tool == "none" or GameState.active_tool == "tape" or GameState.active_tool == "nail" or GameState.active_tool == "crowbar":
+		return
+
 	var placed_count: int = 0
 	for child in assembly_pivot.get_children():
 		if child is JunkPart and child != part and child.is_placed:
@@ -563,25 +597,37 @@ func _on_view_toggle_pressed() -> void:
 		cc.toggle_view()
 
 func _on_tape_pressed() -> void:
-	GameState.set_active_tool("tape")
+	GameState.set_active_tool("none" if GameState.active_tool == "tape" else "tape")
 	_update_tool_buttons()
 
 func _on_nail_pressed() -> void:
-	GameState.set_active_tool("nail")
+	GameState.set_active_tool("none" if GameState.active_tool == "nail" else "nail")
+	_update_tool_buttons()
+
+func _on_crowbar_pressed() -> void:
+	GameState.set_active_tool("none" if GameState.active_tool == "crowbar" else "crowbar")
+	_update_tool_buttons()
+
+func _on_clear_pressed() -> void:
+	GameState.set_active_tool("none")
 	_update_tool_buttons()
 
 func _update_tool_buttons() -> void:
-	if tool_tape_btn == null or tool_nail_btn == null:
+	if tool_tape_btn == null or tool_nail_btn == null or tool_crowbar_btn == null or tool_clear_btn == null:
 		return
 	var active        := GameState.active_tool
 	var active_color  := Color(1.0, 0.9, 0.3)
 	var inactive_color := Color(0.75, 0.75, 0.75)
 	tool_tape_btn.modulate = active_color if active == "tape" else inactive_color
 	tool_nail_btn.modulate = active_color if active == "nail" else inactive_color
+	tool_crowbar_btn.modulate = active_color if active == "crowbar" else inactive_color
+	tool_clear_btn.modulate = active_color if active == "none" else inactive_color
 
 	if nail_status_label:
 		if active == "nail":
 			nail_status_label.text = "Click on a part to place nail, then click nail to hammer"
+		elif active == "crowbar":
+			nail_status_label.text = "Click on a nail to pull it out"
 		else:
 			nail_status_label.text = ""
 
@@ -659,16 +705,39 @@ func _on_nail_placed(nail: Nail) -> void:
 func _on_nail_strike(progress: float) -> void:
 	if nail_status_label:
 		var pct := int(progress * 100)
-		if pct >= 100:
-			nail_status_label.text = "✅ Nail fully driven! Objects fastened."
+		if GameState.active_tool == "crowbar":
+			if pct <= 0:
+				nail_status_label.text = "🪝 Nail removed!"
+			else:
+				nail_status_label.text = "🪝 Pulling out... %d%%" % pct
 		else:
-			nail_status_label.text = "🔨 Hammering... %d%%" % pct
+			if pct >= 100:
+				nail_status_label.text = "✅ Nail fully driven! Objects fastened."
+			else:
+				nail_status_label.text = "🔨 Hammering... %d%%" % pct
 
 func _on_nail_driven(_nail: Nail) -> void:
 	if nail_status_label:
 		nail_status_label.text = "✅ Nail fastened! Place another or switch tools."
 
 func _on_nail_placement_blocked(reason: String) -> void:
+	if nail_status_label:
+		nail_status_label.text = "⚠️ %s" % reason
+
+# ── Tape tool signal handlers ─────────────────────────────────────────────────
+func _on_tape_started() -> void:
+	if nail_status_label:
+		nail_status_label.text = "📍 Tape start set! Click the end point."
+
+func _on_tape_finished() -> void:
+	if nail_status_label:
+		nail_status_label.text = "✅ Taped! Place another or switch tools."
+
+func _on_tape_canceled() -> void:
+	if nail_status_label:
+		nail_status_label.text = "❌ Tape canceled."
+		
+func _on_tape_placement_blocked(reason: String) -> void:
 	if nail_status_label:
 		nail_status_label.text = "⚠️ %s" % reason
 

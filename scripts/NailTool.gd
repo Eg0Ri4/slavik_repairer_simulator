@@ -42,7 +42,7 @@ func _physics_process(delta: float) -> void:
 ## Called by Main.gd when a left-click occurs and active_tool == "nail".
 ## Returns true if the click was consumed (hit a nail or placed one).
 func handle_click(mouse_pos: Vector2) -> bool:
-	if GameState.active_tool != "nail":
+	if GameState.active_tool != "nail" and GameState.active_tool != "crowbar":
 		return false
 
 	# Don't act if we're on cooldown
@@ -60,17 +60,21 @@ func handle_click(mouse_pos: Vector2) -> bool:
 	# ── Step 1: Check if we clicked an existing nail head ────────────────
 	var nail_hit = _raycast_for_nail(origin, direction, space)
 	if nail_hit:
-		if not nail_hit.is_fastened():
-			_strike_nail(nail_hit)
-		else:
-			nail_placement_blocked.emit("Nail is already fully driven!")
+		if GameState.active_tool == "nail":
+			if not nail_hit.is_fastened():
+				_strike_nail(nail_hit)
+			else:
+				nail_placement_blocked.emit("Nail is already fully driven!")
+		elif GameState.active_tool == "crowbar":
+			_pull_nail(nail_hit)
 		return true
 
 	# ── Step 2: Check if we clicked a placed part surface ────────────────
-	var surface_result = _raycast_for_surface(origin, direction, space)
-	if surface_result:
-		_place_nail(surface_result)
-		return true
+	if GameState.active_tool == "nail":
+		var surface_result = _raycast_for_surface(origin, direction, space)
+		if surface_result:
+			_place_nail(surface_result)
+			return true
 
 	return false
 
@@ -84,6 +88,15 @@ func _strike_nail(nail: Nail) -> void:
 
 	if nail.is_fastened():
 		nail_fully_driven.emit(nail)
+		_active_nail = null
+
+func _pull_nail(nail: Nail) -> void:
+	_strike_cooldown = STRIKE_COOLDOWN_TIME
+	_active_nail = nail
+	nail.pull(1.0)
+	nail_strike_performed.emit(nail.get_progress())
+
+	if not nail.is_fastened() and nail.get_progress() <= 0.0:
 		_active_nail = null
 
 
