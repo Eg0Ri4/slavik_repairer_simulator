@@ -10,6 +10,10 @@ var tags: Array = []
 var is_held: bool = false
 var is_placed: bool = false
 
+## Stores data for parts that have been physically merged into this one.
+## Each entry is a Dictionary: {"tags": Array[String], "local_transform": Transform3D}
+var merged_subparts: Array[Dictionary] = []
+
 # The visual mesh child
 var _mesh_node: Node3D = null
 
@@ -297,3 +301,24 @@ func _build_mesh(data: ItemData) -> MeshInstance3D:
 			mi.mesh = m
 
 	return mi
+
+# ── Monolithic Merging ───────────────────────────────────────────────────────
+## Absorbs another JunkPart's logical tags and subparts into this one, relative
+## to this part's current coordinate space.
+func absorb_part(other: JunkPart) -> void:
+	# Calculate other part's transform relative to this part
+	var relative_transform: Transform3D = global_transform.affine_inverse() * other.global_transform
+	
+	# Add the other part's own primary tags (if any)
+	if other.tags.size() > 0:
+		merged_subparts.append({
+			"tags": other.tags.duplicate(),
+			"local_transform": relative_transform
+		})
+	
+	# Absorb any subparts the other part had already absorbed
+	for sub in other.merged_subparts:
+		merged_subparts.append({
+			"tags": sub["tags"].duplicate(),
+			"local_transform": relative_transform * sub["local_transform"]
+		})

@@ -127,11 +127,43 @@ func _fasten() -> void:
 		reparent(_surface_body, false)
 		global_transform = t
 
-	# Create a Generic6DOFJoint3D between the two bodies (if both exist)
+	# Merge the two bodies (if both exist)
 	if _surface_body and _top_body:
-		_create_joint()
+		_merge_bodies()
 
 	nail_fastened.emit()
+
+func _merge_bodies() -> void:
+	if not (_surface_body is JunkPart and _top_body is JunkPart):
+		return
+		
+	var main_body := _surface_body as JunkPart
+	var attached_body := _top_body as JunkPart
+
+	# 1. Move all collision shapes (recursive search)
+	var shapes = attached_body.find_children("*", "CollisionShape3D", true, false)
+	for shape in shapes:
+		shape.reparent(main_body, true)
+		
+	# 2. Move all visual meshes from the attached body
+	var meshes = attached_body.find_children("*", "MeshInstance3D", true, false)
+	for mesh in meshes:
+		mesh.reparent(main_body, true)
+		
+	# 3. Move all visual meshes from the nail itself
+	var nail_meshes = find_children("*", "MeshInstance3D", true, false)
+	for mesh in nail_meshes:
+		mesh.reparent(main_body, true)
+		
+	# 4. Absorb the logical tags and data so EvaluationSystem can still grade it
+	main_body.absorb_part(attached_body)
+		
+	# 5. Combine mass (Godot 4 automatically recalculates the center of mass based on shapes)
+	main_body.mass += attached_body.mass
+	
+	# 6. Destroy the redundant parent nodes
+	attached_body.queue_free()
+	queue_free()
 
 func pull(power: float = 1.0) -> void:
 	if _is_animating or _is_dropped:
@@ -203,63 +235,7 @@ func _start_decay_timer() -> void:
 	)
 
 
-func _create_joint() -> void:
-	# Only create joints between physics bodies
-	if not (_surface_body is RigidBody3D or _surface_body is StaticBody3D):
-		return
-	if not (_top_body is RigidBody3D or _top_body is StaticBody3D):
-		return
 
-	# ── Disable collision between nailed bodies immediately ──────────────
-	# This is MORE reliable than joint.exclude_nodes_from_collision which
-	# breaks when node paths are assigned via call_deferred.
-	if _surface_body is PhysicsBody3D and _top_body is PhysicsBody3D:
-		(_surface_body as PhysicsBody3D).add_collision_exception_with(_top_body as PhysicsBody3D)
-		(_top_body as PhysicsBody3D).add_collision_exception_with(_surface_body as PhysicsBody3D)
-
-	# ── Create a very tight 6DOF joint ──────────────────────────────────
-	# Each nail adds a constraint at its specific position. Multiple nails
-	# at different spots (e.g. 4 corners) create overlapping constraints
-	# that naturally eliminate all wobble — like real nails.
-	_joint = Generic6DOFJoint3D.new()
-	_joint.exclude_nodes_from_collision = true
-
-	# Near-zero linear play (±0.5mm) — bodies can't slide apart
-	var lin_play := 0.0005
-	_joint.set_flag_x(Generic6DOFJoint3D.FLAG_ENABLE_LINEAR_LIMIT, true)
-	_joint.set_flag_y(Generic6DOFJoint3D.FLAG_ENABLE_LINEAR_LIMIT, true)
-	_joint.set_flag_z(Generic6DOFJoint3D.FLAG_ENABLE_LINEAR_LIMIT, true)
-	_joint.set_param_x(Generic6DOFJoint3D.PARAM_LINEAR_LOWER_LIMIT, -lin_play)
-	_joint.set_param_x(Generic6DOFJoint3D.PARAM_LINEAR_UPPER_LIMIT,  lin_play)
-	_joint.set_param_y(Generic6DOFJoint3D.PARAM_LINEAR_LOWER_LIMIT, -lin_play)
-	_joint.set_param_y(Generic6DOFJoint3D.PARAM_LINEAR_UPPER_LIMIT,  lin_play)
-	_joint.set_param_z(Generic6DOFJoint3D.PARAM_LINEAR_LOWER_LIMIT, -lin_play)
-	_joint.set_param_z(Generic6DOFJoint3D.PARAM_LINEAR_UPPER_LIMIT,  lin_play)
-
-	# Near-zero angular play (~0.3°) — bodies can't rotate relative to each other
-	var ang_play := 0.005
-	_joint.set_flag_x(Generic6DOFJoint3D.FLAG_ENABLE_ANGULAR_LIMIT, true)
-	_joint.set_flag_y(Generic6DOFJoint3D.FLAG_ENABLE_ANGULAR_LIMIT, true)
-	_joint.set_flag_z(Generic6DOFJoint3D.FLAG_ENABLE_ANGULAR_LIMIT, true)
-	_joint.set_param_x(Generic6DOFJoint3D.PARAM_ANGULAR_LOWER_LIMIT, -ang_play)
-	_joint.set_param_x(Generic6DOFJoint3D.PARAM_ANGULAR_UPPER_LIMIT,  ang_play)
-	_joint.set_param_y(Generic6DOFJoint3D.PARAM_ANGULAR_LOWER_LIMIT, -ang_play)
-	_joint.set_param_y(Generic6DOFJoint3D.PARAM_ANGULAR_UPPER_LIMIT,  ang_play)
-	_joint.set_param_z(Generic6DOFJoint3D.PARAM_ANGULAR_LOWER_LIMIT, -ang_play)
-	_joint.set_param_z(Generic6DOFJoint3D.PARAM_ANGULAR_UPPER_LIMIT,  ang_play)
-
-	# Add to the common parent (assembly pivot) first, then assign paths
-	var common_parent := _surface_body.get_parent()
-	if common_parent:
-		common_parent.add_child(_joint)
-		_joint.global_position = global_position
-		_do_assign_joint_paths.call_deferred(_joint, _surface_body, _top_body)
-
-func _do_assign_joint_paths(joint: Joint3D, body_a: Node3D, body_b: Node3D) -> void:
-	if is_instance_valid(joint) and is_instance_valid(body_a) and is_instance_valid(body_b):
-		if joint.is_inside_tree() and body_a.is_inside_tree() and body_b.is_inside_tree():
-			joint.node_a = joint.get_path_to(body_a)
-			joint.node_b = joint.get_path_to(body_b)
 
 
 # ── Queries ──────────────────────────────────────────────────────────────────
