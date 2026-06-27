@@ -127,12 +127,12 @@ func _create_joint() -> void:
 		return
 
 	var joint := PinJoint3D.new()
-	joint.global_position = global_position
 
-	# Add to the common parent (assembly pivot) first, then assign paths
+	# Add to the common parent (assembly pivot) first, then assign paths and transforms
 	var common_parent := _surface_body.get_parent()
 	if common_parent:
 		common_parent.add_child(joint)
+		joint.global_position = global_position
 		joint.node_a = joint.get_path_to(_surface_body)
 		joint.node_b = joint.get_path_to(_top_body)
 

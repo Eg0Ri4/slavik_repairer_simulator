@@ -59,14 +59,14 @@ func _create_tape_joint(new_part: JunkPart, anchor: JunkPart, pivot: Node3D) -> 
 	return joint
 
 func _setup_joint(joint: Joint3D, new_part: JunkPart, anchor: JunkPart, pivot: Node3D) -> void:
+	# CRITICAL: add to scene tree FIRST, then assign node paths and transforms
+	pivot.add_child(joint)
+
 	# Position the joint at the midpoint between the two bodies
 	var joint_pos: Vector3 = new_part.global_position
 	if anchor:
 		joint_pos = (new_part.global_position + anchor.global_position) * 0.5
 	joint.global_position = joint_pos
-
-	# CRITICAL: add to scene tree FIRST, then assign node paths
-	pivot.add_child(joint)
 
 	# Now we can safely call get_path_to (nodes must share a common ancestor)
 	if anchor:

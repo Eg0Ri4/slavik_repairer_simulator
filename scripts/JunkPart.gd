@@ -36,14 +36,13 @@ func _ready() -> void:
 
 func _physics_process(_delta: float) -> void:
 	if is_held:
-		_handle_keyboard_rotation()
 		_follow_mouse()
 
 func _unhandled_input(event: InputEvent) -> void:
 	if not is_held:
 		return
 
-	# Track Shift state for mouse rotation mode
+	# Track Shift state for mouse rotation mode and handle keyboard rotation keys
 	if event is InputEventKey:
 		if event.keycode == KEY_SHIFT:
 			if event.pressed and not event.is_echo():
@@ -51,6 +50,26 @@ func _unhandled_input(event: InputEvent) -> void:
 				_last_mouse_pos = get_viewport().get_mouse_position()
 			elif not event.pressed:
 				_shift_held = false
+		elif event.pressed and not event.is_echo():
+			match event.keycode:
+				KEY_Q:
+					_rotation_offset.y -= ROTATION_STEP_DEG
+					get_viewport().set_input_as_handled()
+				KEY_E:
+					_rotation_offset.y += ROTATION_STEP_DEG
+					get_viewport().set_input_as_handled()
+				KEY_R:
+					_rotation_offset.x -= ROTATION_STEP_DEG
+					get_viewport().set_input_as_handled()
+				KEY_F:
+					_rotation_offset.x += ROTATION_STEP_DEG
+					get_viewport().set_input_as_handled()
+				KEY_T:
+					_rotation_offset.z -= ROTATION_STEP_DEG
+					get_viewport().set_input_as_handled()
+				KEY_G:
+					_rotation_offset.z += ROTATION_STEP_DEG
+					get_viewport().set_input_as_handled()
 
 	# Shift + mouse drag → free rotation on Y (horizontal) and X (vertical)
 	if event is InputEventMouseMotion and _shift_held:
@@ -58,31 +77,6 @@ func _unhandled_input(event: InputEvent) -> void:
 		_rotation_offset.y += motion.relative.x * MOUSE_ROT_SENSITIVITY
 		_rotation_offset.x += motion.relative.y * MOUSE_ROT_SENSITIVITY
 		get_viewport().set_input_as_handled()
-
-func _handle_keyboard_rotation() -> void:
-	# Q/E → local Y axis (yaw)
-	if Input.is_key_pressed(KEY_Q) and _is_key_just(KEY_Q):
-		_rotation_offset.y -= ROTATION_STEP_DEG
-	if Input.is_key_pressed(KEY_E) and _is_key_just(KEY_E):
-		_rotation_offset.y += ROTATION_STEP_DEG
-	# R/F → local X axis (pitch)
-	if Input.is_key_pressed(KEY_R) and _is_key_just(KEY_R):
-		_rotation_offset.x -= ROTATION_STEP_DEG
-	if Input.is_key_pressed(KEY_F) and _is_key_just(KEY_F):
-		_rotation_offset.x += ROTATION_STEP_DEG
-	# T/G → local Z axis (roll)
-	if Input.is_key_pressed(KEY_T) and _is_key_just(KEY_T):
-		_rotation_offset.z -= ROTATION_STEP_DEG
-	if Input.is_key_pressed(KEY_G) and _is_key_just(KEY_G):
-		_rotation_offset.z += ROTATION_STEP_DEG
-
-# Debounce helper: tracks which keys were pressed last frame.
-var _prev_key_state: Dictionary = {}
-func _is_key_just(keycode: int) -> bool:
-	var currently := Input.is_key_pressed(keycode)
-	var was: bool = _prev_key_state.get(keycode, false)
-	_prev_key_state[keycode] = currently
-	return currently and not was
 
 # ── Public API ───────────────────────────────────────────────────────────────
 func setup(data: ItemData) -> void:

@@ -31,9 +31,6 @@ var nail_status_label: Label
 # Hover highlight state
 var _hovered_box: JunkBox = null
 
-# Currently hovered drop-zone part (for visual feedback)
-var _drop_preview: Node3D = null
-
 # Active order
 var _order: OrderData
 
@@ -486,7 +483,7 @@ func _on_nail_strike(progress: float) -> void:
 		else:
 			nail_status_label.text = "🔨 Hammering... %d%%" % pct
 
-func _on_nail_driven(nail: Nail) -> void:
+func _on_nail_driven(_nail: Nail) -> void:
 	if nail_status_label:
 		nail_status_label.text = "✅ Nail fastened! Place another or switch tools."
 

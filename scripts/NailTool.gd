@@ -111,8 +111,12 @@ func _place_nail(hit_result: Dictionary) -> void:
 	else:
 		get_tree().current_scene.add_child(nail)
 
-	# Position at the hit point
-	nail.global_position = hit_point
+	# Position the nail outward along the surface normal to prevent clipping.
+	# We use the nail's target_depth so it starts standing out from the surface
+	# and ends up with the head flush when fully driven.
+	var nail_offset: float = nail.target_depth
+	var finalized_position: Vector3 = hit_point + hit_normal * nail_offset
+	nail.global_position = finalized_position
 
 	# Orient the nail so its local Y points along the surface normal
 	# (nail drives INTO the surface, so its -Y points into the surface)
