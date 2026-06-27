@@ -153,6 +153,30 @@ func create_manual_tape_joint(body1: Node3D, pos1: Vector3, norm1: Vector3, body
 	mesh.surface_end()
 	
 	mesh_inst.reparent(body1, true)
+	
+	# Add an Area3D so the crowbar can click the tape
+	var area = Area3D.new()
+	area.collision_layer = 8 # Same as nail heads
+	area.collision_mask = 0
+	area.monitorable = true
+	var col = CollisionShape3D.new()
+	var box = BoxShape3D.new()
+	var tape_dist = pos1.distance_to(pos2)
+	box.size = Vector3(0.08, 0.08, tape_dist)
+	col.shape = box
+	area.add_child(col)
+	mesh_inst.add_child(area)
+	
+	# Align area with the tape
+	area.global_position = (pos1 + pos2) * 0.5
+	if tape_dist > 0.001:
+		area.look_at(pos2, Vector3.UP if abs((pos2 - pos1).normalized().y) < 0.99 else Vector3.RIGHT)
+		
+	# Store references so the crowbar knows what to delete
+	area.set_meta("is_tape", true)
+	area.set_meta("tape_joint", joint)
+	area.set_meta("tape_mesh", mesh_inst)
+	
 	return joint
 
 # ── Joint factories ──────────────────────────────────────────────────────────

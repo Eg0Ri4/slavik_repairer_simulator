@@ -57,17 +57,26 @@ func handle_click(mouse_pos: Vector2) -> bool:
 	var direction := cam.project_ray_normal(mouse_pos)
 	var space := get_world_3d().direct_space_state
 
-	# ── Step 1: Check if we clicked an existing nail head ────────────────
-	var nail_hit = _raycast_for_nail(origin, direction, space)
-	if nail_hit:
-		if GameState.active_tool == "nail":
-			if not nail_hit.is_fastened():
-				_strike_nail(nail_hit)
-			else:
-				nail_placement_blocked.emit("Nail is already fully driven!")
-		elif GameState.active_tool == "crowbar":
-			_pull_nail(nail_hit)
-		return true
+	# ── Step 1: Check if we clicked an existing nail head or tape ────────────────
+	var hit_area = _raycast_for_tool_target(origin, direction, space)
+	if hit_area:
+		if hit_area.has_meta("is_tape"):
+			if GameState.active_tool == "crowbar":
+				_remove_tape(hit_area)
+				return true
+			return false
+			
+		var parent = hit_area.get_parent()
+		if parent is Nail:
+			var nail_hit = parent as Nail
+			if GameState.active_tool == "nail":
+				if not nail_hit.is_fastened():
+					_strike_nail(nail_hit)
+				else:
+					nail_placement_blocked.emit("Nail is already fully driven!")
+			elif GameState.active_tool == "crowbar":
+				_pull_nail(nail_hit)
+			return true
 
 	# ── Step 2: Check if we clicked a placed part surface ────────────────
 	if GameState.active_tool == "nail":
@@ -98,6 +107,21 @@ func _pull_nail(nail: Nail) -> void:
 
 	if not nail.is_fastened() and nail.get_progress() <= 0.0:
 		_active_nail = null
+
+
+func _remove_tape(area: Area3D) -> void:
+	_strike_cooldown = STRIKE_COOLDOWN_TIME
+	
+	var joint = area.get_meta("tape_joint")
+	var mesh = area.get_meta("tape_mesh")
+	
+	if is_instance_valid(joint):
+		joint.queue_free()
+	if is_instance_valid(mesh):
+		mesh.queue_free()
+		
+	# Trigger the UI feedback text for crowbar (it checks for 0 progress)
+	nail_strike_performed.emit(0.0)
 
 
 # ── Nail placement ───────────────────────────────────────────────────────────
@@ -164,22 +188,18 @@ func _align_to_normal(xform: Transform3D, normal: Vector3) -> Transform3D:
 
 
 # ── Raycasting helpers ───────────────────────────────────────────────────────
-func _raycast_for_nail(origin: Vector3, direction: Vector3, space: PhysicsDirectSpaceState3D) -> Nail:
-	# Query layer 8 (nail heads — Area3D). We need to use intersect_ray with
-	# collide_with_areas = true.
+func _raycast_for_tool_target(origin: Vector3, direction: Vector3, space: PhysicsDirectSpaceState3D) -> Area3D:
+	# Query layer 8 (nail heads and tapes — Area3D).
 	var query := PhysicsRayQueryParameters3D.create(
 		origin, origin + direction * ray_distance
 	)
-	query.collision_mask = 8  # nail head layer
+	query.collision_mask = 8
 	query.collide_with_bodies = false
 	query.collide_with_areas = true
 	var result = space.intersect_ray(query)
 
 	if result and result.collider is Area3D:
-		var area := result.collider as Area3D
-		var parent := area.get_parent()
-		if parent is Nail:
-			return parent as Nail
+		return result.collider as Area3D
 
 	return null
 

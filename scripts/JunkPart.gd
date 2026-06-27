@@ -260,7 +260,7 @@ func _get_half_height() -> float:
 ## offset transforms applied to this primary part's current global_transform.
 ## Collisions are off during drag, so direct transform assignment is safe.
 func _update_cluster_transforms() -> void:
-	if GameState.held_cluster.is_empty():
+	if GameState.held_cluster == null or GameState.held_cluster.is_empty():
 		return
 
 	var my_transform := global_transform

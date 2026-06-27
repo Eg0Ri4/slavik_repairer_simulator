@@ -57,10 +57,27 @@ func _ready() -> void:
 	_build_systems()
 	_build_ui()
 	_setup_order()
+	_setup_menu()
 
 	GameState.camera_state_changed.connect(_on_camera_state_changed)
 	GameState.part_picked_up.connect(_on_part_picked_up)
 	GameState.part_placed.connect(_on_part_placed)
+	GameState.phase_changed.connect(_on_phase_changed)
+
+func _setup_menu() -> void:
+	var menu = MenuController.new()
+	menu.name = "MenuController"
+	add_child(menu)
+	# ui_layer is shown by camera_state_changed when the tween finishes
+	menu.game_started.connect(func(): pass)
+	menu.returned_to_menu.connect(func(): ui_layer.visible = false)
+	
+	ui_layer.visible = false
+	GameState.set_phase(GameState.GamePhase.MENU)
+
+func _on_phase_changed(phase: GameState.GamePhase) -> void:
+	if phase == GameState.GamePhase.MENU:
+		ui_layer.visible = false
 
 func _build_systems() -> void:
 	attachment_system = AttachmentSystem.new()
@@ -227,6 +244,9 @@ func _setup_order() -> void:
 
 # ── Input handling ────────────────────────────────────────────────────────────
 func _input(event: InputEvent) -> void:
+	if not GameState.is_playing() or GameState.camera_state == "TRANSITIONING" or GameState.camera_state == "MENU_VIEW":
+		return
+		
 	if event is InputEventKey and event.pressed and not event.is_echo():
 		if event.keycode == KEY_TAB:
 			_on_view_toggle_pressed()
@@ -730,6 +750,12 @@ func _on_tape_placement_blocked(reason: String) -> void:
 
 # ── GameState signal handlers ─────────────────────────────────────────────────
 func _on_camera_state_changed(new_state: String) -> void:
+	if new_state == "TABLE_VIEW" or new_state == "UNDER_TABLE_VIEW":
+		if GameState.is_playing():
+			ui_layer.visible = true
+	else:
+		ui_layer.visible = false
+		
 	if view_toggle_btn == null:
 		return
 	if new_state == "TABLE_VIEW":

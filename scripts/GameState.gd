@@ -1,6 +1,17 @@
 ## GameState - Autoload singleton for global game state
 extends Node
 
+## GamePhase Enum
+enum GamePhase { MENU, PLAYING }
+var current_phase: GamePhase = GamePhase.MENU
+
+func is_playing() -> bool:
+	return current_phase == GamePhase.PLAYING
+
+func set_phase(phase: GamePhase) -> void:
+	current_phase = phase
+	phase_changed.emit(phase)
+
 ## Current tool: "tape", "nail", "crowbar", or "none"
 var active_tool: String = "none"
 
@@ -26,6 +37,7 @@ var cluster_offsets: Dictionary = {}   # JunkPart → Transform3D
 var cluster_joints: Array[Joint3D] = []
 
 ## Signals
+signal phase_changed(new_phase: GamePhase)
 signal tool_changed(new_tool: String)
 signal part_picked_up(part: RigidBody3D)
 signal part_placed()
