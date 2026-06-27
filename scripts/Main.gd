@@ -87,97 +87,82 @@ func _build_ui() -> void:
 	var panel := _make_panel(Vector2(10, 10), Vector2(320, 215))
 	ui_layer.add_child(panel)
 
-	var vbox := VBoxContainer.new()
-	vbox.name = "OrderVBox"
-	vbox.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	vbox.add_theme_constant_override("separation", 6)
-	panel.add_child(vbox)
-
 	var order_title := Label.new()
 	order_title.name = "OrderTitle"
 	order_title.text = "📋 REPAIR ORDER"
 	order_title.add_theme_font_size_override("font_size", 16)
-	vbox.add_child(order_title)
+	order_title.position = Vector2(10, 10)
+	panel.add_child(order_title)
 
 	order_desc_label = Label.new()
 	order_desc_label.name = "OrderDesc"
 	order_desc_label.text = "Loading order..."
 	order_desc_label.add_theme_font_size_override("font_size", 13)
-	order_desc_label.custom_minimum_size = Vector2(295, 60)
+	order_desc_label.custom_minimum_size = Vector2(300, 60)
 	order_desc_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	vbox.add_child(order_desc_label)
+	order_desc_label.position = Vector2(10, 35)
+	panel.add_child(order_desc_label)
 
 	part_name_label = Label.new()
 	part_name_label.name = "PartName"
 	part_name_label.text = "Holding: nothing"
 	part_name_label.add_theme_color_override("font_color", Color(0.9, 0.8, 0.3))
 	part_name_label.add_theme_font_size_override("font_size", 14)
-	vbox.add_child(part_name_label)
+	part_name_label.position = Vector2(10, 100)
+	panel.add_child(part_name_label)
 
 	instructions_label = Label.new()
 	instructions_label.name = "Instructions"
-	instructions_label.text = "Hold RMB: inspect-rotate part (Skyrim)\nNo part + RMB drag: orbit assembly\nLMB part on table: pick it back up\nClick box: grab part  ·  LMB: place\nQ/E: yaw  R/F: pitch  T/G: roll\nShift+drag: free-rotate held part"
+	instructions_label.text = "Hold RMB: rotate held part\nNo part + RMB drag: orbit assembly\nLMB part on table: pick it back up\nClick box: grab part  ·  LMB: place\nScroll: raise/lower held part"
 	instructions_label.add_theme_color_override("font_color", Color(0.75, 0.75, 0.75))
 	instructions_label.add_theme_font_size_override("font_size", 11)
-	vbox.add_child(instructions_label)
+	instructions_label.position = Vector2(10, 125)
+	panel.add_child(instructions_label)
 
 	# ── Tool selector ─────────────────────────────────────────────────────────
 	var tool_panel := _make_panel(Vector2(10, 235), Vector2(320, 115))
 	ui_layer.add_child(tool_panel)
 
-	var tool_vbox := VBoxContainer.new()
-	tool_vbox.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	tool_vbox.add_theme_constant_override("separation", 6)
-	tool_panel.add_child(tool_vbox)
-
 	var tool_title := Label.new()
 	tool_title.text = "🔧 ATTACHMENT TOOL"
 	tool_title.add_theme_font_size_override("font_size", 14)
-	tool_vbox.add_child(tool_title)
+	tool_title.position = Vector2(10, 10)
+	tool_panel.add_child(tool_title)
 
-	var tool_hbox := HBoxContainer.new()
-	tool_hbox.add_theme_constant_override("separation", 8)
-	tool_vbox.add_child(tool_hbox)
-
-	tool_tape_btn = _make_button("📎 TAPE (Wobbly)", Vector2.ZERO, Vector2(140, 32))
-	tool_tape_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	tool_tape_btn = _make_button("📎 TAPE (Wobbly)", Vector2(10, 35), Vector2(140, 32))
 	tool_tape_btn.pressed.connect(_on_tape_pressed)
-	tool_hbox.add_child(tool_tape_btn)
+	tool_panel.add_child(tool_tape_btn)
 
-	tool_nail_btn = _make_button("🔨 NAIL", Vector2.ZERO, Vector2(100, 32))
-	tool_nail_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	tool_nail_btn = _make_button("🔨 NAIL", Vector2(160, 35), Vector2(100, 32))
 	tool_nail_btn.pressed.connect(_on_nail_pressed)
-	tool_hbox.add_child(tool_nail_btn)
+	tool_panel.add_child(tool_nail_btn)
 
 	nail_status_label = Label.new()
 	nail_status_label.name = "NailStatus"
 	nail_status_label.text = ""
 	nail_status_label.add_theme_color_override("font_color", Color(0.8, 0.6, 0.3))
 	nail_status_label.add_theme_font_size_override("font_size", 12)
-	tool_vbox.add_child(nail_status_label)
+	nail_status_label.position = Vector2(10, 75)
+	tool_panel.add_child(nail_status_label)
 
 	_update_tool_buttons()
 
 	# ── View toggle ───────────────────────────────────────────────────────────
-	view_toggle_btn = _make_button("🔽 LOOK UNDER TABLE (Tab)", Vector2(10, 330), Vector2(320, 40))
+	view_toggle_btn = _make_button("🔽 LOOK UNDER TABLE (Tab)", Vector2(10, 360), Vector2(320, 40))
 	view_toggle_btn.pressed.connect(_on_view_toggle_pressed)
 	ui_layer.add_child(view_toggle_btn)
 
 	# ── TRUST ME button ───────────────────────────────────────────────────────
-	trust_me_btn = _make_button("⚡ TRUST ME, I'M AN ENGINEER ⚡", Vector2(10, 380), Vector2(320, 50))
+	trust_me_btn = _make_button("⚡ TRUST ME, I'M AN ENGINEER ⚡", Vector2(10, 410), Vector2(320, 50))
 	trust_me_btn.add_theme_font_size_override("font_size", 15)
 	trust_me_btn.add_theme_color_override("font_color", Color(1, 1, 0))
 	trust_me_btn.pressed.connect(_on_trust_me_pressed)
 	ui_layer.add_child(trust_me_btn)
 
 	# ── Result display ────────────────────────────────────────────────────────
-	var result_panel := _make_panel(Vector2(10, 440), Vector2(320, 135))
+	var result_panel := _make_panel(Vector2(10, 470), Vector2(320, 135))
 	result_panel.name = "ResultPanel"
 	ui_layer.add_child(result_panel)
-
-	var result_vbox := VBoxContainer.new()
-	result_vbox.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	result_panel.add_child(result_vbox)
 
 	result_label = Label.new()
 	result_label.name = "ResultLabel"
@@ -185,10 +170,11 @@ func _build_ui() -> void:
 	result_label.add_theme_font_size_override("font_size", 13)
 	result_label.custom_minimum_size = Vector2(300, 110)
 	result_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	result_vbox.add_child(result_label)
+	result_label.position = Vector2(10, 10)
+	result_panel.add_child(result_label)
 
 	# ── Reset button ──────────────────────────────────────────────────────────
-	var reset_btn := _make_button("🗑 CLEAR ASSEMBLY", Vector2(10, 585), Vector2(320, 36))
+	var reset_btn := _make_button("🗑 CLEAR ASSEMBLY", Vector2(10, 615), Vector2(320, 36))
 	reset_btn.pressed.connect(_on_reset_pressed)
 	ui_layer.add_child(reset_btn)
 
@@ -402,49 +388,14 @@ func _extract_from_box(box: JunkBox) -> void:
 	if cc and cc.has_method("go_to_table_view"):
 		cc.go_to_table_view()
 
-func _place_held_part(mouse_pos: Vector2) -> void:
+func _place_held_part(_mouse_pos: Vector2) -> void:
 	var part := GameState.held_part
 	if part == null:
 		return
 
-	var cam := get_viewport().get_camera_3d()
-	if cam == null:
-		return
-
-	var saved_transform := cam.global_transform
-	var using_target := false
-	var tv_target = get_node_or_null("TableViewTarget")
-	if tv_target:
-		var target_camera_global = tv_target.global_transform * cam.transform
-		cam.global_transform = target_camera_global
-		using_target = true
-
-	var origin    := cam.project_ray_origin(mouse_pos)
-	var direction := cam.project_ray_normal(mouse_pos)
-
-	if using_target:
-		cam.global_transform = saved_transform
-
-	var table_y := _table_y
-	var drop_pos := Vector3.ZERO
-	var hit_y    := table_y
-
-	var space := get_world_3d().direct_space_state
-	var query := PhysicsRayQueryParameters3D.create(origin, origin + direction * 20.0)
-	query.collision_mask = 3   # table (1) + placed parts (2)
-	var result := space.intersect_ray(query)
-
-	if result:
-		drop_pos = result.position
-		hit_y    = result.position.y
-	else:
-		if abs(direction.y) > 0.001:
-			var t := (table_y - origin.y) / direction.y
-			if t > 0:
-				drop_pos = origin + direction * t
-		hit_y = table_y
-
-	drop_pos.y = hit_y + (part.item_data.size.y * 0.5 if part.item_data else 0.1)
+	# Release the part at its current held position — gravity does the rest.
+	# No snapping to the table; the part falls naturally from wherever it is.
+	var drop_pos := part.global_position
 
 	# ── Place the primary part ───────────────────────────────────────────
 	part.place_at(drop_pos, assembly_pivot)
@@ -527,6 +478,13 @@ func _do_assign_joint_paths(joint: Joint3D, body_a: Node3D, body_b: Node3D) -> v
 
 
 func _attach_part(part: JunkPart) -> void:
+	# In hand mode, don't auto-create joints — parts drop freely with gravity
+	if GameState.active_tool == "hand":
+		return
+	# Nails create their own joints via the NailTool flow, so skip here too
+	if GameState.active_tool == "nail":
+		return
+
 	var placed_count: int = 0
 	for child in assembly_pivot.get_children():
 		if child is JunkPart and child != part and child.is_placed:
@@ -563,11 +521,17 @@ func _on_view_toggle_pressed() -> void:
 		cc.toggle_view()
 
 func _on_tape_pressed() -> void:
-	GameState.set_active_tool("tape")
+	if GameState.active_tool == "tape":
+		GameState.set_active_tool("hand")
+	else:
+		GameState.set_active_tool("tape")
 	_update_tool_buttons()
 
 func _on_nail_pressed() -> void:
-	GameState.set_active_tool("nail")
+	if GameState.active_tool == "nail":
+		GameState.set_active_tool("hand")
+	else:
+		GameState.set_active_tool("nail")
 	_update_tool_buttons()
 
 func _update_tool_buttons() -> void:
@@ -576,14 +540,18 @@ func _update_tool_buttons() -> void:
 	var active        := GameState.active_tool
 	var active_color  := Color(1.0, 0.9, 0.3)
 	var inactive_color := Color(0.75, 0.75, 0.75)
-	tool_tape_btn.modulate = active_color if active == "tape" else inactive_color
-	tool_nail_btn.modulate = active_color if active == "nail" else inactive_color
+	var hand_color    := Color(0.5, 0.5, 0.5)
+	tool_tape_btn.modulate = active_color if active == "tape" else (hand_color if active == "hand" else inactive_color)
+	tool_nail_btn.modulate = active_color if active == "nail" else (hand_color if active == "hand" else inactive_color)
 
 	if nail_status_label:
-		if active == "nail":
-			nail_status_label.text = "Click on a part to place nail, then click nail to hammer"
-		else:
-			nail_status_label.text = ""
+		match active:
+			"nail":
+				nail_status_label.text = "Click on a part to place nail, then click nail to hammer"
+			"tape":
+				nail_status_label.text = "Parts will be taped (wobbly) on placement"
+			"hand":
+				nail_status_label.text = "✋ Hand mode — parts drop freely (click tool to select)"
 
 func _on_trust_me_pressed() -> void:
 	if _order == null or result_label == null:
@@ -664,9 +632,29 @@ func _on_nail_strike(progress: float) -> void:
 		else:
 			nail_status_label.text = "🔨 Hammering... %d%%" % pct
 
-func _on_nail_driven(_nail: Nail) -> void:
+func _on_nail_driven(nail: Nail) -> void:
 	if nail_status_label:
 		nail_status_label.text = "✅ Nail fastened! Place another or switch tools."
+
+	# ── Make the ENTIRE nailed cluster ignore internal collisions ─────────
+	# Find all parts transitively connected via joints (the full cluster).
+	# Add collision exceptions between EVERY pair so the cluster behaves
+	# as a single solid object — no jittering even when thrown hard.
+	var root_body: JunkPart = null
+	if nail._surface_body is JunkPart:
+		root_body = nail._surface_body as JunkPart
+	elif nail._top_body is JunkPart:
+		root_body = nail._top_body as JunkPart
+
+	if root_body and assembly_pivot:
+		var cluster: Array[JunkPart] = attachment_system.get_connected_cluster(root_body, assembly_pivot)
+		# Add collision exception between every pair in the cluster
+		for i in range(cluster.size()):
+			for j in range(i + 1, cluster.size()):
+				var a: PhysicsBody3D = cluster[i] as PhysicsBody3D
+				var b: PhysicsBody3D = cluster[j] as PhysicsBody3D
+				a.add_collision_exception_with(b)
+				b.add_collision_exception_with(a)
 
 func _on_nail_placement_blocked(reason: String) -> void:
 	if nail_status_label:
@@ -694,8 +682,8 @@ func _on_part_placed() -> void:
 		part_name_label.text = "Holding: nothing"
 
 # ── UI Helpers ────────────────────────────────────────────────────────────────
-func _make_panel(pos: Vector2, sz: Vector2) -> PanelContainer:
-	var panel := PanelContainer.new()
+func _make_panel(pos: Vector2, sz: Vector2) -> Panel:
+	var panel := Panel.new()
 	panel.position = pos
 	panel.custom_minimum_size = sz
 	panel.size = sz
@@ -705,10 +693,6 @@ func _make_panel(pos: Vector2, sz: Vector2) -> PanelContainer:
 	style.border_color = Color(0.4, 0.35, 0.2, 1.0)
 	style.set_border_width_all(2)
 	style.set_corner_radius_all(6)
-	style.content_margin_left = 8
-	style.content_margin_top = 6
-	style.content_margin_right = 8
-	style.content_margin_bottom = 6
 	panel.add_theme_stylebox_override("panel", style)
 
 	return panel

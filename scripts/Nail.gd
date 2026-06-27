@@ -121,9 +121,45 @@ func _create_joint() -> void:
 	if not (_top_body is RigidBody3D or _top_body is StaticBody3D):
 		return
 
-	var joint := PinJoint3D.new()
+	# ── Disable collision between nailed bodies immediately ──────────────
+	# This is MORE reliable than joint.exclude_nodes_from_collision which
+	# breaks when node paths are assigned via call_deferred.
+	if _surface_body is PhysicsBody3D and _top_body is PhysicsBody3D:
+		(_surface_body as PhysicsBody3D).add_collision_exception_with(_top_body as PhysicsBody3D)
+		(_top_body as PhysicsBody3D).add_collision_exception_with(_surface_body as PhysicsBody3D)
 
-	# Add to the common parent (assembly pivot) first, then assign paths and transforms
+	# ── Create a very tight 6DOF joint ──────────────────────────────────
+	# Each nail adds a constraint at its specific position. Multiple nails
+	# at different spots (e.g. 4 corners) create overlapping constraints
+	# that naturally eliminate all wobble — like real nails.
+	var joint := Generic6DOFJoint3D.new()
+	joint.exclude_nodes_from_collision = true
+
+	# Near-zero linear play (±0.5mm) — bodies can't slide apart
+	var lin_play := 0.0005
+	joint.set_flag_x(Generic6DOFJoint3D.FLAG_ENABLE_LINEAR_LIMIT, true)
+	joint.set_flag_y(Generic6DOFJoint3D.FLAG_ENABLE_LINEAR_LIMIT, true)
+	joint.set_flag_z(Generic6DOFJoint3D.FLAG_ENABLE_LINEAR_LIMIT, true)
+	joint.set_param_x(Generic6DOFJoint3D.PARAM_LINEAR_LOWER_LIMIT, -lin_play)
+	joint.set_param_x(Generic6DOFJoint3D.PARAM_LINEAR_UPPER_LIMIT,  lin_play)
+	joint.set_param_y(Generic6DOFJoint3D.PARAM_LINEAR_LOWER_LIMIT, -lin_play)
+	joint.set_param_y(Generic6DOFJoint3D.PARAM_LINEAR_UPPER_LIMIT,  lin_play)
+	joint.set_param_z(Generic6DOFJoint3D.PARAM_LINEAR_LOWER_LIMIT, -lin_play)
+	joint.set_param_z(Generic6DOFJoint3D.PARAM_LINEAR_UPPER_LIMIT,  lin_play)
+
+	# Near-zero angular play (~0.3°) — bodies can't rotate relative to each other
+	var ang_play := 0.005
+	joint.set_flag_x(Generic6DOFJoint3D.FLAG_ENABLE_ANGULAR_LIMIT, true)
+	joint.set_flag_y(Generic6DOFJoint3D.FLAG_ENABLE_ANGULAR_LIMIT, true)
+	joint.set_flag_z(Generic6DOFJoint3D.FLAG_ENABLE_ANGULAR_LIMIT, true)
+	joint.set_param_x(Generic6DOFJoint3D.PARAM_ANGULAR_LOWER_LIMIT, -ang_play)
+	joint.set_param_x(Generic6DOFJoint3D.PARAM_ANGULAR_UPPER_LIMIT,  ang_play)
+	joint.set_param_y(Generic6DOFJoint3D.PARAM_ANGULAR_LOWER_LIMIT, -ang_play)
+	joint.set_param_y(Generic6DOFJoint3D.PARAM_ANGULAR_UPPER_LIMIT,  ang_play)
+	joint.set_param_z(Generic6DOFJoint3D.PARAM_ANGULAR_LOWER_LIMIT, -ang_play)
+	joint.set_param_z(Generic6DOFJoint3D.PARAM_ANGULAR_UPPER_LIMIT,  ang_play)
+
+	# Add to the common parent (assembly pivot) first, then assign paths
 	var common_parent := _surface_body.get_parent()
 	if common_parent:
 		common_parent.add_child(joint)
