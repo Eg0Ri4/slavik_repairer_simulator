@@ -28,7 +28,7 @@ var tool_nail_btn: Button
 var tool_crowbar_btn: Button
 var tool_clear_btn: Button
 var trust_me_btn: Button
-var ghost_toggle_btn: Button
+
 var finish_btn: Button
 var result_label: Label
 var held_label: Label
@@ -73,30 +73,44 @@ func _ready() -> void:
 	_build_systems()
 	_build_ui()
 	_setup_order()
-	_setup_menu()
+	_setup_new_hud()
 
 	GameState.camera_state_changed.connect(_on_camera_state_changed)
 	GameState.part_picked_up.connect(_on_part_picked_up)
 	GameState.part_placed.connect(_on_part_placed)
 	GameState.phase_changed.connect(_on_phase_changed)
-
-func _setup_menu() -> void:
-	var menu = MenuController.new()
-	menu.name = "MenuController"
-	ui_layer.add_child(menu)
-	menu.game_started.connect(func():
-		_hud_root.visible = true
-		ghost_toggle_btn.visible = true
-	)
-	menu.returned_to_menu.connect(func():
-		_hud_root.visible = false
-		ghost_toggle_btn.visible = false
-	)
 	
 	_hud_root.visible = false
-	if ghost_toggle_btn:
-		ghost_toggle_btn.visible = false
-	GameState.set_phase(GameState.GamePhase.MENU)
+
+	
+	GameState.set_phase(GameState.GamePhase.PLAYING)
+	if _new_hud:
+		_new_hud.visible = true
+
+var _new_hud: HUDController = null
+func _setup_new_hud() -> void:
+	var hud_scene = preload("res://scenes/HUD.tscn")
+	_new_hud = hud_scene.instantiate() as HUDController
+	_new_hud.visible = false
+	add_child(_new_hud)
+	
+	# Hijack the old UI text references so they write to the new HUD
+	result_label = _new_hud.score_label
+	part_name_label = _new_hud.holding_label
+	
+	_new_hud.submit_pressed.connect(_on_trust_me_pressed)
+	_new_hud.clear_pressed.connect(_on_reset_pressed)
+	_new_hud.skip_pressed.connect(_on_skip_pressed)
+	
+	# The new HUD handles its own Pause Menu directly now!
+	
+	_new_hud.tool_changed.connect(func(tool_state):
+		match tool_state:
+			HUDController.ToolState.HAND: GameState.set_active_tool("none")
+			HUDController.ToolState.TAPE: GameState.set_active_tool("tape")
+			HUDController.ToolState.NAIL: GameState.set_active_tool("nail")
+			HUDController.ToolState.CROWBAR: GameState.set_active_tool("crowbar")
+	)
 
 func _on_phase_changed(phase: GameState.GamePhase) -> void:
 	pass
@@ -232,9 +246,7 @@ func _build_ui() -> void:
 	_update_tool_buttons()
 
 	# ── View toggle ───────────────────────────────────────────────────────────
-	ghost_toggle_btn = _make_button("👻 TOGGLE GHOST (Tab)", Vector2(10, 360), Vector2(320, 40))
-	ghost_toggle_btn.pressed.connect(_on_ghost_toggle_pressed)
-	ui_layer.add_child(ghost_toggle_btn)
+
 
 	# ── TRUST ME button ───────────────────────────────────────────────────────
 	trust_me_btn = _make_button("⚡ TRUST ME, I'M AN ENGINEER ⚡", Vector2(10, 410), Vector2(320, 50))
@@ -1044,23 +1056,7 @@ func _on_tape_placement_blocked(reason: String) -> void:
 
 # ── GameState signal handlers ─────────────────────────────────────────────────
 func _on_camera_state_changed(new_state: String) -> void:
-	if ghost_toggle_btn == null:
-		return
-		
-	if new_state == "TABLE_VIEW":
-		if GameState.is_playing():
-			_hud_root.visible = true
-			ghost_toggle_btn.visible = true
-	elif new_state == "UNDER_TABLE_VIEW":
-		if GameState.is_playing():
-			_hud_root.visible = false
-			ghost_toggle_btn.visible = true
-	elif new_state == "EVAL_VIEW":
-		_hud_root.visible = true
-		ghost_toggle_btn.visible = false
-	else:
-		_hud_root.visible = false
-		ghost_toggle_btn.visible = false
+	pass
 
 func _on_part_picked_up(part: RigidBody3D) -> void:
 	if part_name_label and part is JunkPart:

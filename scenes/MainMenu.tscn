@@ -1,0 +1,57 @@
+[gd_scene format=3 uid="uid://cx6t18pjlx7n"]
+
+[ext_resource type="Script" path="res://scripts/ui/MainMenu.gd" id="1_menu"]
+
+[node name="MainMenu" type="CanvasLayer" node_paths=PackedStringArray("play_btn", "exit_btn")]
+script = ExtResource("1_menu")
+play_btn = NodePath("ColorRect/CenterContainer/VBoxContainer/PlayButton")
+exit_btn = NodePath("ColorRect/CenterContainer/VBoxContainer/ExitButton")
+
+[node name="ColorRect" type="ColorRect" parent="."]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+color = Color(0.04, 0.03, 0.02, 1)
+
+[node name="CenterContainer" type="CenterContainer" parent="ColorRect"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+
+[node name="VBoxContainer" type="VBoxContainer" parent="ColorRect/CenterContainer"]
+layout_mode = 2
+theme_override_constants/separation = 30
+
+[node name="Title" type="Label" parent="ColorRect/CenterContainer/VBoxContainer"]
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 0.88, 0.25, 1)
+theme_override_font_sizes/font_size = 64
+text = "TRUST ME,
+I'M AN ENGINEER"
+horizontal_alignment = 1
+
+[node name="Subtitle" type="Label" parent="ColorRect/CenterContainer/VBoxContainer"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.7, 0.65, 0.5, 1)
+theme_override_font_sizes/font_size = 18
+text = "Fix anything. Trust no one. Especially yourself."
+horizontal_alignment = 1
+
+[node name="Gap" type="Control" parent="ColorRect/CenterContainer/VBoxContainer"]
+custom_minimum_size = Vector2(0, 40)
+layout_mode = 2
+
+[node name="PlayButton" type="Button" parent="ColorRect/CenterContainer/VBoxContainer"]
+custom_minimum_size = Vector2(300, 80)
+layout_mode = 2
+size_flags_horizontal = 4
+theme_override_font_sizes/font_size = 32
+text = "▶ PLAY"
+
+[node name="ExitButton" type="Button" parent="ColorRect/CenterContainer/VBoxContainer"]
+custom_minimum_size = Vector2(300, 60)
+layout_mode = 2
+size_flags_horizontal = 4
+theme_override_font_sizes/font_size = 24
+text = "✕ EXIT"

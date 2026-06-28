@@ -81,4 +81,4 @@ collision_mask = 0
 script = ExtResource("4_box")
 box_color = Color(0.3, 0.3, 0.55, 1)
 box_label = "Box C"
-mesh_folder_path = "res://assets/models/boxA"
+mesh_folder_path = "res://assets/models/boxC"

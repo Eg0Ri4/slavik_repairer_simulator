@@ -53,36 +53,9 @@ func _ready() -> void:
 
 	_pivot = get_node_or_null("../AssemblyPivot")
 
-	_menu_cam.current = true
-	_game_cam.current = false
-	GameState.set_camera_state("MENU_VIEW")
-
-	# Ищем MenuController с задержкой (ui_layer добавляется в _ready Main.gd)
-	call_deferred("_connect_menu_controller")
-
-func _connect_menu_controller() -> void:
-	var main := get_parent()
-	if main == null:
-		return
-	_menu_ctrl = _find_by_signal(main, "game_started")
-	if _menu_ctrl:
-		if not _menu_ctrl.game_started.is_connected(_on_game_started):
-			_menu_ctrl.game_started.connect(_on_game_started)
-		if not _menu_ctrl.returned_to_menu.is_connected(_on_returned_to_menu):
-			_menu_ctrl.returned_to_menu.connect(_on_returned_to_menu)
-	else:
-		push_warning("CameraController: MenuController не найден, повтор через 0.5с")
-		await get_tree().create_timer(0.5).timeout
-		_connect_menu_controller()
-
-func _find_by_signal(root: Node, sig: String) -> Node:
-	for child in root.get_children():
-		if child.has_signal(sig):
-			return child
-		var found := _find_by_signal(child, sig)
-		if found:
-			return found
-	return null
+	_menu_cam.current = false
+	_game_cam.current = true
+	GameState.set_camera_state("TABLE_VIEW")
 
 # ── Input ────────────────────────────────────────────────────────────────────
 func _input(event: InputEvent) -> void:
@@ -99,60 +72,7 @@ func _input(event: InputEvent) -> void:
 	elif event is InputEventMouseMotion and _rmb_down:
 		pass # Orbit assembly disabled per user request
 
-# ── game_started ─────────────────────────────────────────────────────────────
-func _on_game_started() -> void:
-	if _current_tween and _current_tween.is_valid():
-		_current_tween.kill()
-	_is_tweening = true
-	GameState.set_camera_state("TRANSITIONING")
 
-	# GameCamera стартует с позиции MenuCamera
-	# Если мы уже в GameCamera (перебили tween возврата), не сбрасываем позицию
-	if not _game_cam.current:
-		_game_cam.position         = _menu_cam.position
-		_game_cam.rotation_degrees = _menu_cam.rotation_degrees
-		_game_cam.current          = true
-		_menu_cam.current          = false
-
-	var tw := create_tween()
-	_current_tween = tw
-	tw.set_parallel(true)
-	tw.set_ease(Tween.EASE_IN_OUT)
-	tw.set_trans(Tween.TRANS_SINE)
-	tw.tween_property(_game_cam, "position",         _game_cam_local_pos, gameplay_tween_duration)
-	tw.tween_property(_game_cam, "rotation_degrees", _game_cam_local_rot, gameplay_tween_duration)
-	tw.finished.connect(func() -> void:
-		_is_tweening = false
-		if GameState.is_playing():
-			GameState.set_camera_state("TABLE_VIEW")
-			if _menu_ctrl and _menu_ctrl.has_method("show_gameplay_hud"):
-				_menu_ctrl.show_gameplay_hud()
-	, CONNECT_ONE_SHOT)
-
-# ── returned_to_menu ─────────────────────────────────────────────────────────
-func _on_returned_to_menu() -> void:
-	if _current_tween and _current_tween.is_valid():
-		_current_tween.kill()
-	_is_tweening = true
-	GameState.set_camera_state("TRANSITIONING")
-
-	var tw := create_tween()
-	_current_tween = tw
-	tw.set_parallel(true)
-	tw.set_ease(Tween.EASE_IN_OUT)
-	tw.set_trans(Tween.TRANS_SINE)
-	tw.tween_property(_game_cam, "position",         _menu_cam.position,         gameplay_tween_duration)
-	tw.tween_property(_game_cam, "rotation_degrees", _menu_cam.rotation_degrees, gameplay_tween_duration)
-	tw.finished.connect(func() -> void:
-		_is_tweening = false
-		_menu_cam.current          = true
-		_game_cam.current          = false
-		# Восстанавливаем родную позицию (для следующего старта)
-		_game_cam.position         = _game_cam_local_pos
-		_game_cam.rotation_degrees = _game_cam_local_rot
-		if not GameState.is_playing():
-			GameState.set_camera_state("MENU_VIEW")
-	, CONNECT_ONE_SHOT)
 
 # ── TABLE_VIEW / UNDER_TABLE_VIEW ────────────────────────────────────────────
 func go_to_table_view() -> void:
