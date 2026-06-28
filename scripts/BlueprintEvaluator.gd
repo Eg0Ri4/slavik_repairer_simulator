@@ -336,6 +336,24 @@ func _generate_sample_points(col_shape: CollisionShape3D) -> Array[Vector3]:
 					if Vector2(local.x, local.z).length() <= r:
 						points.append(xform * local)
 
+	elif shape is ConvexPolygonShape3D:
+		var pts: PackedVector3Array = (shape as ConvexPolygonShape3D).points
+		if pts.size() > 0:
+			var aabb := AABB(pts[0], Vector3.ZERO)
+			for i in range(1, pts.size()):
+				aabb = aabb.expand(pts[i])
+			var half: Vector3 = aabb.size * 0.5
+			var center: Vector3 = aabb.get_center()
+			for xi in range(n):
+				for yi in range(n):
+					for zi in range(n):
+						var local := Vector3(
+							lerpf(-half.x, half.x, (float(xi) + 0.5) / float(n)),
+							lerpf(-half.y, half.y, (float(yi) + 0.5) / float(n)),
+							lerpf(-half.z, half.z, (float(zi) + 0.5) / float(n))
+						) + center
+						points.append(xform * local)
+
 	else:
 		# Fallback: treat as a tiny box
 		var fallback_size := Vector3(0.05, 0.05, 0.05)

@@ -28,9 +28,10 @@ var tool_nail_btn: Button
 var tool_crowbar_btn: Button
 var tool_clear_btn: Button
 var trust_me_btn: Button
+var ghost_toggle_btn: Button
+var finish_btn: Button
 var result_label: Label
 var held_label: Label
-var view_toggle_btn: Button
 var order_desc_label: Label
 var order_title_label: Label
 var part_name_label: Label
@@ -85,16 +86,16 @@ func _setup_menu() -> void:
 	ui_layer.add_child(menu)
 	menu.game_started.connect(func():
 		_hud_root.visible = true
-		view_toggle_btn.visible = true
+		ghost_toggle_btn.visible = true
 	)
 	menu.returned_to_menu.connect(func():
 		_hud_root.visible = false
-		view_toggle_btn.visible = false
+		ghost_toggle_btn.visible = false
 	)
 	
 	_hud_root.visible = false
-	if view_toggle_btn:
-		view_toggle_btn.visible = false
+	if ghost_toggle_btn:
+		ghost_toggle_btn.visible = false
 	GameState.set_phase(GameState.GamePhase.MENU)
 
 func _on_phase_changed(phase: GameState.GamePhase) -> void:
@@ -231,9 +232,9 @@ func _build_ui() -> void:
 	_update_tool_buttons()
 
 	# ── View toggle ───────────────────────────────────────────────────────────
-	view_toggle_btn = _make_button("🔽 LOOK UNDER TABLE (Tab)", Vector2(10, 360), Vector2(320, 40))
-	view_toggle_btn.pressed.connect(_on_view_toggle_pressed)
-	ui_layer.add_child(view_toggle_btn)
+	ghost_toggle_btn = _make_button("👻 TOGGLE GHOST (Tab)", Vector2(10, 360), Vector2(320, 40))
+	ghost_toggle_btn.pressed.connect(_on_ghost_toggle_pressed)
+	ui_layer.add_child(ghost_toggle_btn)
 
 	# ── TRUST ME button ───────────────────────────────────────────────────────
 	trust_me_btn = _make_button("⚡ TRUST ME, I'M AN ENGINEER ⚡", Vector2(10, 410), Vector2(320, 50))
@@ -390,7 +391,7 @@ func _unhandled_input(event: InputEvent) -> void:
 
 	if event is InputEventKey and event.pressed and not event.is_echo():
 		if event.keycode == KEY_TAB:
-			_on_view_toggle_pressed()
+			_on_ghost_toggle_pressed()
 			get_viewport().set_input_as_handled()
 		elif event.keycode == KEY_ESCAPE:
 			# Tool deselection: Escape resets to "none"
@@ -755,14 +756,12 @@ func _update_box_hover() -> void:
 			new_hovered.highlight(true)
 		_hovered_box = new_hovered
 
-# ── UI callbacks ──────────────────────────────────────────────────────────────
-func _on_view_toggle_pressed() -> void:
+func _on_ghost_toggle_pressed() -> void:
 	if GameState.held_part != null:
 		return
 
-	var cc := get_node_or_null("CameraController")
-	if cc and cc.has_method("toggle_view"):
-		cc.toggle_view()
+	if ghost_root != null:
+		ghost_root.visible = not ghost_root.visible
 
 ## Tool toggle: clicking an active tool button a second time resets to "none".
 func _on_tape_pressed() -> void:
@@ -831,22 +830,29 @@ func _on_trust_me_pressed() -> void:
 		var pct: int = bp_result["percentage"]
 		var matched: int = bp_result["matched_count"]
 		var total: int = bp_result["total_ghost_pieces"]
-		var grade: String = evaluation_system.grade_label(pct)
 
-		var detail := "━━━ BLUEPRINT EVAL ━━━\n%s\nMatched: %d / %d pieces (%d%%)\n\n" % [grade, matched, total, pct]
+		var spill_ratio = bp_result.get("spill_ratio", 0.0)
+		var spill_pct: int = int(spill_ratio * 100.0)
+		
+		# Separate base score and final score for clarity
+		var base_pct: int = pct
+		var final_pct: int = max(0, base_pct - spill_pct)
+		var grade: String = evaluation_system.grade_label(final_pct)
+		
+		var detail := "━━━ BLUEPRINT EVAL ━━━\n%s\nMatched: %d / %d pieces\n" % [grade, matched, total]
+		detail += "▶ Base Coverage: %d%%\n" % base_pct
+		detail += "▶ Spill Penalty: -%d%%\n" % spill_pct
+		detail += "▶ Final Score: %d%%\n\n" % final_pct
+		
 		for piece in bp_result["pieces"]:
 			var icon := "✅" if piece["matched"] else "❌"
 			var cov_pct: int = int(piece["coverage"] * 100.0)
 			var parts_used: int = piece["overlapping_parts"]
 			detail += "%s %s: %d%% filled (%d parts)\n" % [icon, piece["ghost_label"], cov_pct, parts_used]
-			
-		var spill_ratio = bp_result.get("spill_ratio", 0.0)
-		var spill_pct: int = int(spill_ratio * 100.0)
-		detail += "\n⚠️ Spill Penalty: %d%% of outside space filled\n" % spill_pct
 		
-		if pct >= 40:
-			if spill_ratio > 0.10:
-				detail += "\n❌ FAILED! You spilled too much material outside the ghost bounds! (Max 15%)"
+		if final_pct >= 40:
+			if spill_ratio > 0.08:
+				detail += "\n❌ FAILED! You spilled too much material outside the ghost bounds! (Max 8%)"
 			else:
 				detail += "\n🎉 SUCCESS! Loading next ghost blueprint in 3 seconds..."
 				var reset_func = func():
@@ -1038,25 +1044,23 @@ func _on_tape_placement_blocked(reason: String) -> void:
 
 # ── GameState signal handlers ─────────────────────────────────────────────────
 func _on_camera_state_changed(new_state: String) -> void:
-	if view_toggle_btn == null:
+	if ghost_toggle_btn == null:
 		return
 		
 	if new_state == "TABLE_VIEW":
 		if GameState.is_playing():
 			_hud_root.visible = true
-			view_toggle_btn.visible = true
-		view_toggle_btn.text = "🔽 LOOK UNDER TABLE (Tab)"
+			ghost_toggle_btn.visible = true
 	elif new_state == "UNDER_TABLE_VIEW":
 		if GameState.is_playing():
 			_hud_root.visible = false
-			view_toggle_btn.visible = true
-		view_toggle_btn.text = "🔼 BACK TO TABLE (Tab)"
+			ghost_toggle_btn.visible = true
 	elif new_state == "EVAL_VIEW":
 		_hud_root.visible = true
-		view_toggle_btn.visible = false
+		ghost_toggle_btn.visible = false
 	else:
 		_hud_root.visible = false
-		view_toggle_btn.visible = false
+		ghost_toggle_btn.visible = false
 
 func _on_part_picked_up(part: RigidBody3D) -> void:
 	if part_name_label and part is JunkPart:
