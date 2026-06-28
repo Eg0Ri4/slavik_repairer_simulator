@@ -646,7 +646,7 @@ func _extract_from_box(box: JunkBox) -> void:
 	elif box.name == "BoxB":
 		part.custom_scale = 0.2
 	elif box.name == "BoxC":
-		part.custom_scale = 0.25
+		part.custom_scale = 0.1
 			
 	part.setup(item_data)
 	add_child(part)
@@ -720,6 +720,9 @@ func _place_held_part(_mouse_pos: Vector2) -> void:
 	# ── Attach primary if other parts exist (for solo parts without cluster) ──
 	_attach_part(part)
 	GameState.place_part()
+	
+	# Live score check after placing objects
+	evaluate_score(false)
 
 
 ## Deferred joint path assignment — ensures nodes are settled in the tree
@@ -830,7 +833,7 @@ func _update_tool_buttons() -> void:
 				nail_status_label.text = ""
 
 # ── TRUST ME evaluation ──────────────────────────────────────────────────────
-func _on_trust_me_pressed() -> void:
+func evaluate_score(is_submit: bool = false) -> void:
 	if _order == null or result_label == null:
 		return
 
@@ -863,23 +866,35 @@ func _on_trust_me_pressed() -> void:
 		detail += "▶ Spill Penalty: -%d%%\n" % spill_pct
 		detail += "▶ Final Score: %d%%\n\n" % final_pct
 		
+		var piece_index := 1
 		for piece in bp_result["pieces"]:
 			var icon := "✅" if piece["matched"] else "❌"
 			var cov_pct: int = int(piece["coverage"] * 100.0)
 			var parts_used: int = piece["overlapping_parts"]
-			detail += "%s %s: %d%% filled (%d parts)\n" % [icon, piece["ghost_label"], cov_pct, parts_used]
+			detail += "%s Part %d: %d%% filled (%d parts)\n" % [icon, piece_index, cov_pct, parts_used]
+			piece_index += 1
 		
-		if final_pct >= 40:
+		if final_pct >= 30:
 			if spill_ratio > 0.08:
 				detail += "\n❌ FAILED! You spilled too much material outside the ghost bounds! (Max 8%)"
+				blueprint_evaluator.set_ghost_visible(true)
 			else:
-				detail += "\n🎉 SUCCESS! Loading next ghost blueprint in 3 seconds..."
-				var reset_func = func():
-					_on_skip_pressed()
-				get_tree().create_timer(3.0).timeout.connect(reset_func)
+				blueprint_evaluator.set_ghost_visible(false)
+				if is_submit:
+					detail += "\n🎉 SUCCESS! Loading next ghost blueprint in 3 seconds..."
+					var reset_func = func():
+						_on_skip_pressed()
+					get_tree().create_timer(3.0).timeout.connect(reset_func)
+				else:
+					detail += "\n🎉 PASSED! Press 'Trust Me' to submit when ready!"
+		else:
+			blueprint_evaluator.set_ghost_visible(true)
 			
 		result_label.text = detail
 		return
+
+func _on_trust_me_pressed() -> void:
+	evaluate_score(true)
 
 	# ── Silhouette Evaluation (if blueprint texture is assigned) ─────────
 	if _order.blueprint_silhouette != null:

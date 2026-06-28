@@ -29,8 +29,12 @@ extends Node
 @export_range(3, 8) var samples_per_axis: int = 5
 
 ## Minimum coverage ratio (0.0–1.0) for a ghost piece to count as "matched".
-## 0.4 = 40% of the ghost volume must be filled by player parts.
-@export_range(0.0, 1.0) var coverage_threshold: float = 0.4
+## Set to 0.30 to match the 30% pass requirement.
+@export_range(0.0, 1.0) var coverage_threshold: float = 0.30
+
+## Margin added to player shapes when checking if they cover ghost points.
+## Makes the blueprint evaluation more forgiving for slightly misaligned parts.
+@export var forgiveness_margin: float = 0.05
 
 ## If true, print per-piece debug info to the console.
 @export var debug_logging: bool = false
@@ -232,7 +236,7 @@ func _evaluate_ghost_coverage(ghost: Area3D, part_shapes: Array[Dictionary]) -> 
 			var ps: Dictionary = part_shapes[i]
 			# Transform world point into the collision shape's local space
 			var local_point: Vector3 = ps["inverse_transform"] * point
-			if _is_point_in_shape(local_point, ps["shape"]):
+			if _is_point_in_shape(local_point, ps["shape"], forgiveness_margin):
 				filled_points += 1
 				contributing_shapes[i] = true
 				break  # point is filled, no need to check more shapes
@@ -374,9 +378,9 @@ func _generate_sample_points(col_shape: CollisionShape3D) -> Array[Vector3]:
 # ── Point-in-Shape Tests (Pure Math) ────────────────────────────────────────
 
 ## Check if a point (already in the shape's LOCAL space) is inside the shape.
-func _is_point_in_shape(local_point: Vector3, shape: Shape3D) -> bool:
+func _is_point_in_shape(local_point: Vector3, shape: Shape3D, margin: float = 0.0) -> bool:
 	if shape is BoxShape3D:
-		var half: Vector3 = (shape as BoxShape3D).size * 0.5
+		var half: Vector3 = (shape as BoxShape3D).size * 0.5 + Vector3.ONE * margin
 		return (
 			absf(local_point.x) <= half.x and
 			absf(local_point.y) <= half.y and
@@ -384,13 +388,13 @@ func _is_point_in_shape(local_point: Vector3, shape: Shape3D) -> bool:
 		)
 
 	if shape is SphereShape3D:
-		return local_point.length() <= (shape as SphereShape3D).radius
+		return local_point.length() <= (shape as SphereShape3D).radius + margin
 
 	if shape is CylinderShape3D:
 		var cyl := shape as CylinderShape3D
 		return (
-			absf(local_point.y) <= cyl.height * 0.5 and
-			Vector2(local_point.x, local_point.z).length() <= cyl.radius
+			absf(local_point.y) <= (cyl.height * 0.5) + margin and
+			Vector2(local_point.x, local_point.z).length() <= cyl.radius + margin
 		)
 
 	if shape is ConvexPolygonShape3D:
@@ -401,6 +405,8 @@ func _is_point_in_shape(local_point: Vector3, shape: Shape3D) -> bool:
 		var aabb := AABB(pts[0], Vector3.ZERO)
 		for i in range(1, pts.size()):
 			aabb = aabb.expand(pts[i])
+		if margin > 0.0:
+			aabb = aabb.grow(margin)
 		return aabb.has_point(local_point)
 
 	return false
