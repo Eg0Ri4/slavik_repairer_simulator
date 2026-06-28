@@ -402,7 +402,7 @@ func _unhandled_input(event: InputEvent) -> void:
 			return
 
 	if event is InputEventKey and event.pressed and not event.is_echo():
-		if event.keycode == KEY_TAB:
+		if event.keycode == KEY_SHIFT:
 			_on_ghost_toggle_pressed()
 			get_viewport().set_input_as_handled()
 		elif event.keycode == KEY_ESCAPE:

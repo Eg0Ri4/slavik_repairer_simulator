@@ -14,7 +14,7 @@ var _mesh_files: Array[String] = []
 
 var _highlight_mat: StandardMaterial3D
 var _normal_mat: StandardMaterial3D
-var _mesh_inst: MeshInstance3D
+var _mesh_inst: Node3D
 
 signal part_extracted(part_data: ItemData)
 
@@ -28,25 +28,58 @@ func _ready() -> void:
 			child.queue_free()
 
 	# Build visual box
-	_mesh_inst = MeshInstance3D.new()
-	_mesh_inst.name = "BoxMeshInstance"
-	var box_mesh := BoxMesh.new()
-	box_mesh.size = Vector3(0.4, 0.35, 0.35)
-	_mesh_inst.mesh = box_mesh
+	var box_scene = load("res://assets/models/boxglb.glb")
+	if box_scene:
+		_mesh_inst = box_scene.instantiate()
+		_mesh_inst.name = "BoxMeshInstance"
+		
+		# Auto-center and scale to fit 0.4, 0.35, 0.35
+		var mesh_node = _mesh_inst.get_node_or_null("CardboardBox_1")
+		if mesh_node is MeshInstance3D and mesh_node.mesh:
+			var aabb = mesh_node.mesh.get_aabb()
+			var center_local = aabb.position + aabb.size * 0.5
+			var center_transformed = mesh_node.transform * center_local
+			var size_transformed = mesh_node.transform.basis * aabb.size
+			size_transformed = size_transformed.abs()
+			
+			var target_size = Vector3(0.4, 0.35, 0.35)
+			var scale_factor = target_size / size_transformed
+			var uniform_scale = min(scale_factor.x, min(scale_factor.y, scale_factor.z))
+			
+			_mesh_inst.scale = Vector3(uniform_scale, uniform_scale, uniform_scale)
+			_mesh_inst.position = -center_transformed * uniform_scale
+		
+		add_child(_mesh_inst)
 
-	_normal_mat = StandardMaterial3D.new()
-	_normal_mat.albedo_color = box_color
-	_normal_mat.roughness = 0.9
+		_highlight_mat = StandardMaterial3D.new()
+		_highlight_mat.albedo_color = Color(1, 1, 1, 0.1)
+		_highlight_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		_highlight_mat.emission_enabled = true
+		_highlight_mat.emission = box_color.lightened(0.2)
+		_highlight_mat.emission_energy_multiplier = 0.5
 
-	_highlight_mat = StandardMaterial3D.new()
-	_highlight_mat.albedo_color = box_color.lightened(0.35)
-	_highlight_mat.roughness = 0.9
-	_highlight_mat.emission_enabled = true
-	_highlight_mat.emission = box_color.lightened(0.2)
-	_highlight_mat.emission_energy_multiplier = 0.5
+		# Try to tint the original materials
+		_tint_and_setup_meshes(_mesh_inst, box_color)
+	else:
+		_mesh_inst = MeshInstance3D.new()
+		_mesh_inst.name = "BoxMeshInstance"
+		var box_mesh := BoxMesh.new()
+		box_mesh.size = Vector3(0.4, 0.35, 0.35)
+		_mesh_inst.mesh = box_mesh
 
-	box_mesh.surface_set_material(0, _normal_mat)
-	add_child(_mesh_inst)
+		_normal_mat = StandardMaterial3D.new()
+		_normal_mat.albedo_color = box_color
+		_normal_mat.roughness = 0.9
+
+		_highlight_mat = StandardMaterial3D.new()
+		_highlight_mat.albedo_color = box_color.lightened(0.35)
+		_highlight_mat.roughness = 0.9
+		_highlight_mat.emission_enabled = true
+		_highlight_mat.emission = box_color.lightened(0.2)
+		_highlight_mat.emission_energy_multiplier = 0.5
+
+		box_mesh.surface_set_material(0, _normal_mat)
+		add_child(_mesh_inst)
 
 	# Label above box
 	var label3d := Label3D.new()
@@ -108,12 +141,39 @@ func _populate_pool() -> void:
 		item.shape_type = d["shape"]
 		_item_pool.append(item)
 
+func _tint_and_setup_meshes(node: Node, color: Color) -> void:
+	if node is MeshInstance3D:
+		var mesh = node.mesh
+		if mesh:
+			for i in range(mesh.get_surface_count()):
+				var mat = mesh.surface_get_material(i)
+				if not mat:
+					mat = node.get_active_material(i)
+				if mat and mat is StandardMaterial3D:
+					var new_mat = mat.duplicate()
+					new_mat.albedo_color = color
+					node.set_surface_override_material(i, new_mat)
+	for child in node.get_children():
+		_tint_and_setup_meshes(child, color)
+
 func highlight(on: bool) -> void:
-	if _mesh_inst and _mesh_inst.mesh:
-		if on:
-			_mesh_inst.mesh.surface_set_material(0, _highlight_mat)
+	if _mesh_inst:
+		if _mesh_inst is MeshInstance3D and _mesh_inst.mesh != null:
+			if on:
+				_mesh_inst.mesh.surface_set_material(0, _highlight_mat)
+			else:
+				_mesh_inst.mesh.surface_set_material(0, _normal_mat)
 		else:
-			_mesh_inst.mesh.surface_set_material(0, _normal_mat)
+			_apply_highlight_overlay(_mesh_inst, on)
+
+func _apply_highlight_overlay(node: Node, on: bool) -> void:
+	if node is MeshInstance3D:
+		if on:
+			node.material_overlay = _highlight_mat
+		else:
+			node.material_overlay = null
+	for child in node.get_children():
+		_apply_highlight_overlay(child, on)
 
 func extract_random_part() -> Dictionary:
 	if _item_pool.is_empty():

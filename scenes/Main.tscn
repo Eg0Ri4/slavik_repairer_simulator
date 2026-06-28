@@ -58,7 +58,7 @@ shape = SubResource("BoxShape3D_table")
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.1188364, 0.19478256, 0.14027315)
 
 [node name="BoxA" type="StaticBody3D" parent="." unique_id=633883063]
-transform = Transform3D(0.061334442, 0, -0.19036303, 0, 0.2, 0, 0.19036303, 0, 0.061334442, -0.33161613, -0.03872276, 0.004536271)
+transform = Transform3D(0.122668885, 0, -0.38072607, 0, 0.4, 0, 0.38072607, 0, 0.122668885, -0.31111598, -0.033466786, 0.0022345483)
 collision_layer = 4
 collision_mask = 0
 script = ExtResource("4_box")
@@ -66,16 +66,16 @@ box_color = Color(0.55, 0.32, 0.14, 1)
 mesh_folder_path = "res://assets/models/boxA"
 
 [node name="BoxB" type="StaticBody3D" parent="." unique_id=832138351]
-transform = Transform3D(0.2, 0, 0, 0, 0.2, 0, 0, 0, 0.2, -0.26844144, -0.03603944, 0.25470054)
+transform = Transform3D(0.176243, 0, -0.35907993, 0, 0.4, 0, 0.35907993, 0, 0.176243, -0.26287293, -0.032090366, 0.24065629)
 collision_layer = 4
 collision_mask = 0
 script = ExtResource("4_box")
 box_color = Color(0.2, 0.45, 0.25, 1)
 box_label = "Box B"
-mesh_folder_path = "res://assets/models/boxA"
+mesh_folder_path = "res://assets/models/boxB"
 
 [node name="BoxC" type="StaticBody3D" parent="." unique_id=543542442]
-transform = Transform3D(0.2, 0, 0, 0, 0.2, 0, 0, 0, 0.2, -0.101920485, -0.050217405, 0.4667024)
+transform = Transform3D(0.20351385, 0, -0.34435755, 0, 0.4, 0, 0.34435755, 0, 0.20351385, -0.114004314, -0.043902904, 0.4621454)
 collision_layer = 4
 collision_mask = 0
 script = ExtResource("4_box")
