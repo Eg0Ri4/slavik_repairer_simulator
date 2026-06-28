@@ -1,15 +1,13 @@
 [gd_scene format=3 uid="uid://dfy4u315n"]
 
-[ext_resource type="Script" path="res://scripts/ui/HUDController.gd" id="1_controller"]
+[ext_resource type="Script" uid="uid://dknptwdiuowwb" path="res://scripts/ui/HUDController.gd" id="1_controller"]
 
-[node name="HUD" type="CanvasLayer" node_paths=PackedStringArray("score_label", "submit_btn", "clear_btn", "skip_btn", "timer_label", "money_label", "menu_btn", "holding_label", "tools_container", "pause_menu", "resume_btn", "quit_btn")]
+[node name="HUD" type="CanvasLayer" unique_id=746059355 node_paths=PackedStringArray("score_label", "submit_btn", "clear_btn", "skip_btn", "menu_btn", "holding_label", "tools_container", "pause_menu", "resume_btn", "quit_btn")]
 script = ExtResource("1_controller")
 score_label = NodePath("MainMargin/TopLeftCorner/ScoreLabel")
 submit_btn = NodePath("MainMargin/TopLeftCorner/ActionButtons/SubmitButton")
 clear_btn = NodePath("MainMargin/TopLeftCorner/ActionButtons/ClearButton")
 skip_btn = NodePath("MainMargin/TopLeftCorner/ActionButtons/SkipButton")
-timer_label = NodePath("MainMargin/TopRightCorner/TimerLabel")
-money_label = NodePath("MainMargin/TopRightCorner/MoneyLabel")
 menu_btn = NodePath("MainMargin/TopRightCorner/MenuButton")
 holding_label = NodePath("MainMargin/BottomCenter/HoldingLabel")
 tools_container = NodePath("MainMargin/BottomCenter/ToolbeltBar")
@@ -17,124 +15,118 @@ pause_menu = NodePath("PauseMenu")
 resume_btn = NodePath("PauseMenu/CenterContainer/VBoxContainer/ResumeButton")
 quit_btn = NodePath("PauseMenu/CenterContainer/VBoxContainer/QuitButton")
 
-[node name="MainMargin" type="MarginContainer" parent="."]
-mouse_filter = 2
+[node name="MainMargin" type="MarginContainer" parent="." unique_id=215336319]
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
+mouse_filter = 2
 theme_override_constants/margin_left = 24
 theme_override_constants/margin_top = 24
 theme_override_constants/margin_right = 24
 theme_override_constants/margin_bottom = 24
 
-[node name="TopLeftCorner" type="VBoxContainer" parent="MainMargin"]
-mouse_filter = 2
+[node name="TopLeftCorner" type="VBoxContainer" parent="MainMargin" unique_id=527032678]
 layout_mode = 2
 size_flags_horizontal = 0
 size_flags_vertical = 0
-
-[node name="ActionButtons" type="HBoxContainer" parent="MainMargin/TopLeftCorner"]
 mouse_filter = 2
-layout_mode = 2
 
-[node name="SubmitButton" type="Button" parent="MainMargin/TopLeftCorner/ActionButtons"]
+[node name="ActionButtons" type="HBoxContainer" parent="MainMargin/TopLeftCorner" unique_id=487774835]
+layout_mode = 2
+mouse_filter = 2
+
+[node name="SubmitButton" type="Button" parent="MainMargin/TopLeftCorner/ActionButtons" unique_id=909873816]
 layout_mode = 2
 text = "Submit"
 
-[node name="ClearButton" type="Button" parent="MainMargin/TopLeftCorner/ActionButtons"]
+[node name="ClearButton" type="Button" parent="MainMargin/TopLeftCorner/ActionButtons" unique_id=951279536]
 layout_mode = 2
 text = "Clear Table"
 
-[node name="SkipButton" type="Button" parent="MainMargin/TopLeftCorner/ActionButtons"]
+[node name="SkipButton" type="Button" parent="MainMargin/TopLeftCorner/ActionButtons" unique_id=1602109129]
 layout_mode = 2
 text = "Skip Blueprint"
 
-[node name="ScoreLabel" type="Label" parent="MainMargin/TopLeftCorner"]
+[node name="ScoreLabel" type="Label" parent="MainMargin/TopLeftCorner" unique_id=1634119548]
 layout_mode = 2
 text = "Score: 0%"
 
-[node name="TopRightCorner" type="HBoxContainer" parent="MainMargin"]
-mouse_filter = 2
+[node name="TopRightCorner" type="HBoxContainer" parent="MainMargin" unique_id=431157538]
 layout_mode = 2
 size_flags_horizontal = 8
 size_flags_vertical = 0
-
-[node name="TimerLabel" type="Label" parent="MainMargin/TopRightCorner"]
-layout_mode = 2
-text = "1:23  "
-
-[node name="MoneyLabel" type="Label" parent="MainMargin/TopRightCorner"]
-layout_mode = 2
-text = "$100  "
-
-[node name="MenuButton" type="Button" parent="MainMargin/TopRightCorner"]
-layout_mode = 2
-text = "Menu"
-
-[node name="BottomCenter" type="VBoxContainer" parent="MainMargin"]
 mouse_filter = 2
+
+[node name="MenuButton" type="Button" parent="MainMargin/TopRightCorner" unique_id=332003966]
+layout_mode = 2
+text = "Pause"
+
+[node name="BottomCenter" type="VBoxContainer" parent="MainMargin" unique_id=198382725]
 layout_mode = 2
 size_flags_horizontal = 4
 size_flags_vertical = 8
+mouse_filter = 2
 alignment = 1
 
-[node name="HoldingLabel" type="Label" parent="MainMargin/BottomCenter"]
+[node name="HoldingLabel" type="Label" parent="MainMargin/BottomCenter" unique_id=935875938]
 layout_mode = 2
 text = "Holding: Wooden Plank"
 horizontal_alignment = 1
 
-[node name="ToolbeltBar" type="HBoxContainer" parent="MainMargin/BottomCenter"]
-mouse_filter = 2
+[node name="ToolbeltBar" type="HBoxContainer" parent="MainMargin/BottomCenter" unique_id=2039875131]
 layout_mode = 2
+mouse_filter = 2
 alignment = 1
 
-[node name="HandIcon" type="Button" parent="MainMargin/BottomCenter/ToolbeltBar"]
+[node name="HandIcon" type="Button" parent="MainMargin/BottomCenter/ToolbeltBar" unique_id=1047508068]
 layout_mode = 2
 text = "Hand"
 
-[node name="TapeIcon" type="Button" parent="MainMargin/BottomCenter/ToolbeltBar"]
+[node name="TapeIcon" type="Button" parent="MainMargin/BottomCenter/ToolbeltBar" unique_id=314855965]
 layout_mode = 2
 text = "Tape"
 
-[node name="NailIcon" type="Button" parent="MainMargin/BottomCenter/ToolbeltBar"]
+[node name="NailIcon" type="Button" parent="MainMargin/BottomCenter/ToolbeltBar" unique_id=396284619]
 layout_mode = 2
 text = "Nail"
 
-[node name="CrowbarIcon" type="Button" parent="MainMargin/BottomCenter/ToolbeltBar"]
+[node name="CrowbarIcon" type="Button" parent="MainMargin/BottomCenter/ToolbeltBar" unique_id=1023701134]
 layout_mode = 2
 text = "Crowbar"
 
-[node name="PauseMenu" type="ColorRect" parent="."]
+[node name="PauseMenu" type="ColorRect" parent="." unique_id=1330169829]
 visible = false
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
 color = Color(0, 0, 0, 0.8)
 
-[node name="CenterContainer" type="CenterContainer" parent="PauseMenu"]
+[node name="CenterContainer" type="CenterContainer" parent="PauseMenu" unique_id=267772037]
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
 
-[node name="VBoxContainer" type="VBoxContainer" parent="PauseMenu/CenterContainer"]
+[node name="VBoxContainer" type="VBoxContainer" parent="PauseMenu/CenterContainer" unique_id=2024855348]
 layout_mode = 2
 theme_override_constants/separation = 20
 
-[node name="Label" type="Label" parent="PauseMenu/CenterContainer/VBoxContainer"]
+[node name="Label" type="Label" parent="PauseMenu/CenterContainer/VBoxContainer" unique_id=355488276]
 layout_mode = 2
 theme_override_font_sizes/font_size = 32
 text = "PAUSED"
 horizontal_alignment = 1
 
-[node name="ResumeButton" type="Button" parent="PauseMenu/CenterContainer/VBoxContainer"]
+[node name="ResumeButton" type="Button" parent="PauseMenu/CenterContainer/VBoxContainer" unique_id=1035786595]
 layout_mode = 2
 theme_override_font_sizes/font_size = 24
 text = "Resume"
 
-[node name="QuitButton" type="Button" parent="PauseMenu/CenterContainer/VBoxContainer"]
+[node name="QuitButton" type="Button" parent="PauseMenu/CenterContainer/VBoxContainer" unique_id=966381901]
 layout_mode = 2
 theme_override_font_sizes/font_size = 24
 text = "Main Menu"

@@ -6,6 +6,7 @@ signal submit_pressed()
 signal clear_pressed()
 signal skip_pressed()
 signal menu_pressed()
+signal resume_pressed()
 signal tool_changed(new_tool)
 
 # ── Enums ───────────────────────────────────────────────────────────────────
@@ -20,8 +21,6 @@ var current_tool: ToolState = ToolState.HAND
 @export var clear_btn: Button
 @export var skip_btn: Button
 
-@export var timer_label: Label
-@export var money_label: Label
 @export var menu_btn: Button
 
 @export var holding_label: Label
@@ -82,13 +81,7 @@ func update_score(val: float) -> void:
 	if score_label:
 		score_label.text = "Score: %d%%" % int(val)
 
-func update_timer(time_str: String) -> void:
-	if timer_label:
-		timer_label.text = time_str
 
-func update_money(val: int) -> void:
-	if money_label:
-		money_label.text = "$%d" % val
 
 # ── Internal Helpers ─────────────────────────────────────────────────────────
 func _update_holding_ui() -> void:
@@ -121,6 +114,7 @@ func _on_menu_pressed() -> void:
 func _on_resume_pressed() -> void:
 	if pause_menu:
 		pause_menu.visible = false
+	resume_pressed.emit()
 
 func _on_quit_pressed() -> void:
 	get_tree().change_scene_to_file("res://scenes/MainMenu.tscn")

@@ -14,6 +14,9 @@ var blueprint_evaluator
 var nail_tool: NailTool
 var tape_tool: TapeTool
 
+# Time Attack mode manager
+var _time_attack: TimeAttackManager = null
+
 # Ghost blueprint for 3D overlap evaluation
 var ghost_root: Node3D = null
 
@@ -75,6 +78,14 @@ func _ready() -> void:
 	_setup_order()
 	_setup_new_hud()
 
+	# ── Time Attack mode ──────────────────────────────────────────────────────
+	_time_attack = TimeAttackManager.new()
+	_time_attack.name = "TimeAttackManager"
+	add_child(_time_attack)
+	_time_attack.order_generated.connect(_on_time_attack_order_generated)
+	_time_attack.start()
+	# ─────────────────────────────────────────────────────────────────────────
+
 	GameState.camera_state_changed.connect(_on_camera_state_changed)
 	GameState.part_picked_up.connect(_on_part_picked_up)
 	GameState.part_placed.connect(_on_part_placed)
@@ -102,6 +113,13 @@ func _setup_new_hud() -> void:
 	_new_hud.clear_pressed.connect(_on_reset_pressed)
 	_new_hud.skip_pressed.connect(_on_skip_pressed)
 	
+	_new_hud.menu_pressed.connect(func():
+		if _time_attack: _time_attack.set_paused(true)
+	)
+	_new_hud.resume_pressed.connect(func():
+		if _time_attack: _time_attack.set_paused(false)
+	)
+	
 	# The new HUD handles its own Pause Menu directly now!
 	
 	_new_hud.tool_changed.connect(func(tool_state):
@@ -114,6 +132,11 @@ func _setup_new_hud() -> void:
 
 func _on_phase_changed(phase: GameState.GamePhase) -> void:
 	pass
+
+func _on_time_attack_order_generated(order: OrderData) -> void:
+	_order = order
+	GameState.current_order = _order
+	_populate_order_ui(_order)
 
 func _build_systems() -> void:
 	attachment_system = AttachmentSystem.new()
@@ -300,14 +323,10 @@ func _setup_order() -> void:
 	_order = OrderData.new()
 	_order.toy_name = "Broken Workshop Fan"
 	_order.client_description = "The workshop fan stopped working! Needs:\n• A BLADE near the top\n• A MOTOR in the center\n• A FRAME at the base"
-	_order.required_component_tags = ["blade", "motor", "frame"]
-	_order.pass_tolerance = 80.0
+	_order.required_component_tags = []
+	_order.pass_tolerance = 30.0
 	# Legacy requirements for spatial-tag evaluation fallback
-	_order.requirements = [
-		{"required_tag": "blade",  "target_position": Vector3(0.0,  0.30, 0.0), "points": 100},
-		{"required_tag": "motor",  "target_position": Vector3(0.0,  0.00, 0.0), "points": 150},
-		{"required_tag": "frame",  "target_position": Vector3(0.0, -0.20, 0.0), "points": 80},
-	]
+	_order.requirements = []
 	_order.tolerance = 0.5
 	GameState.current_order = _order
 
@@ -837,6 +856,11 @@ func evaluate_score(is_submit: bool = false) -> void:
 	if _order == null or result_label == null:
 		return
 
+	# ── Time Attack: record pending score before evaluation display ───────────
+	if _time_attack and is_submit:
+		_time_attack.on_evaluation_submitted(blueprint_evaluator, ghost_root)
+	# ─────────────────────────────────────────────────────────────────────────
+
 	var placed_count: int = 0
 	for child in assembly_pivot.get_children():
 		if child is JunkPart:
@@ -859,9 +883,8 @@ func evaluate_score(is_submit: bool = false) -> void:
 		# Separate base score and final score for clarity
 		var base_pct: int = pct
 		var final_pct: int = max(0, base_pct - spill_pct)
-		var grade: String = evaluation_system.grade_label(final_pct)
 		
-		var detail := "━━━ BLUEPRINT EVAL ━━━\n%s\nMatched: %d / %d pieces\n" % [grade, matched, total]
+		var detail := "━━━ BLUEPRINT EVAL ━━━\nMatched: %d / %d pieces\n" % [matched, total]
 		detail += "▶ Base Coverage: %d%%\n" % base_pct
 		detail += "▶ Spill Penalty: -%d%%\n" % spill_pct
 		detail += "▶ Final Score: %d%%\n\n" % final_pct
@@ -1014,6 +1037,11 @@ func _on_reset_pressed() -> void:
 		result_label.text = "Assembly cleared. Grab some parts from the boxes!"
 	if part_name_label:
 		part_name_label.text = "Holding: nothing"
+
+	# ── Time Attack: bank pending score + generate next order ─────────────────
+	if _time_attack:
+		_time_attack.on_clear_pressed()
+	# ─────────────────────────────────────────────────────────────────────────
 
 func _on_skip_pressed() -> void:
 	# Clear the parts first
