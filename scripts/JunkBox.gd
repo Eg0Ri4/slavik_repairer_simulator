@@ -6,7 +6,7 @@ extends StaticBody3D
 
 @export var box_color: Color = Color(0.55, 0.35, 0.15)
 @export var box_label: String = "Box A"
-@export_dir var mesh_folder_path: String = ""
+@export_dir var mesh_folder_path: String = "res://assets/models"
 
 # Predefined pool of items this box can produce
 var _item_pool: Array[ItemData] = []
@@ -98,6 +98,7 @@ func _populate_pool() -> void:
 		{"name": "Widget Ball",    "tags": ["gear"],   "color": Color(0.8, 0.3, 0.3),  "size": Vector3(0.12, 0.12, 0.12), "shape": "sphere"},
 		{"name": "Fan Blade",      "tags": ["blade"],  "color": Color(0.5, 0.7, 0.9),  "size": Vector3(0.22, 0.04, 0.10), "shape": "box"},
 	]
+
 	for d in defs:
 		var item := ItemData.new()
 		item.item_name = d["name"]

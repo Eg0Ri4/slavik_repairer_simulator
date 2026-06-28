@@ -10,8 +10,12 @@ var assembly_pivot: Node3D
 var table: Node3D
 var attachment_system: AttachmentSystem
 var evaluation_system: EvaluationSystem
+var blueprint_evaluator
 var nail_tool: NailTool
 var tape_tool: TapeTool
+
+# Ghost blueprint for 3D overlap evaluation
+var ghost_root: Node3D = null
 
 # Under-table boxes
 var boxes: Array[JunkBox] = []
@@ -44,6 +48,10 @@ var _hovered_box: JunkBox = null
 var _order: OrderData
 
 var _table_y: float = 0.3
+
+# Ghost rotation state
+var _ghost_rmb_held: bool = false
+const GHOST_ROT_SPEED: float = 0.005
 
 # ── Lifecycle ────────────────────────────────────────────────────────────────
 func _ready() -> void:
@@ -100,6 +108,13 @@ func _build_systems() -> void:
 	evaluation_system = EvaluationSystem.new()
 	evaluation_system.name = "EvaluationSystem"
 	add_child(evaluation_system)
+
+	var evaluator_script = load("res://scripts/BlueprintEvaluator.gd")
+	blueprint_evaluator = evaluator_script.new()
+	blueprint_evaluator.name = "BlueprintEvaluator"
+	blueprint_evaluator.samples_per_axis = 5
+	blueprint_evaluator.coverage_threshold = 0.4
+	add_child(blueprint_evaluator)
 
 	nail_tool = NailTool.new()
 	nail_tool.name = "NailTool"
@@ -242,9 +257,13 @@ func _build_ui() -> void:
 	result_panel.add_child(result_label)
 
 	# ── Reset button ──────────────────────────────────────────────────────────
-	var reset_btn := _make_button("🗑 CLEAR ASSEMBLY", Vector2(10, 615), Vector2(320, 36))
+	var reset_btn := _make_button("🗑 CLEAR ASSEMBLY", Vector2(10, 615), Vector2(155, 36))
 	reset_btn.pressed.connect(_on_reset_pressed)
 	_hud_root.add_child(reset_btn)
+
+	var skip_btn := _make_button("⏭ SKIP ORDER", Vector2(175, 615), Vector2(155, 36))
+	skip_btn.pressed.connect(_on_skip_pressed)
+	_hud_root.add_child(skip_btn)
 
 	# ── Silhouette overlay (hidden until evaluation) ──────────────────────────
 	_silhouette_overlay = TextureRect.new()
@@ -279,6 +298,53 @@ func _setup_order() -> void:
 	_order.tolerance = 0.5
 	GameState.current_order = _order
 
+	# ── Ghost Blueprint (3D overlap evaluation) ─────────────────────────
+	var ghost_blueprint = assembly_pivot.get_node_or_null("GhostBlueprint")
+	
+	var dir = DirAccess.open("res://scenes/ghosts")
+	var ghost_files = []
+	if dir:
+		dir.list_dir_begin()
+		var f = dir.get_next()
+		while f != "":
+			if f.ends_with(".tscn"):
+				ghost_files.append(f)
+			f = dir.get_next()
+	
+	if ghost_files.size() > 0:
+		var random_ghost = ghost_files[randi() % ghost_files.size()]
+		
+		# Try to pick a different ghost than the current one
+		if ghost_files.size() > 1 and _order != null:
+			var current_toy_name = _order.toy_name.replace("Broken ", "")
+			var loop_count = 0
+			while random_ghost.replace("Ghost_", "").replace(".tscn", "").capitalize() == current_toy_name and loop_count < 10:
+				random_ghost = ghost_files[randi() % ghost_files.size()]
+				loop_count += 1
+				
+		var ghost_scene = load("res://scenes/ghosts/" + random_ghost)
+		if ghost_scene:
+			ghost_root = ghost_scene.instantiate()
+			
+			# Update order name to match
+			var toy_name = random_ghost.replace("Ghost_", "").replace(".tscn", "").capitalize()
+			_order.toy_name = "Broken " + toy_name
+			_order.client_description = "We need a " + toy_name + "! Please assemble it according to the blueprint."
+			
+			if ghost_blueprint:
+				var offset = ghost_blueprint.get("projection_offset")
+				if offset == null:
+					offset = Vector3.ZERO
+				ghost_root.transform = ghost_blueprint.transform
+				ghost_root.position += offset
+			
+			assembly_pivot.add_child(ghost_root)
+			_apply_ghost_material(ghost_root)
+			blueprint_evaluator.set_ghost_root(ghost_root)
+	
+	if ghost_blueprint:
+		ghost_blueprint.queue_free()
+
 	# Dynamically inject order fields into the UI card
 	_populate_order_ui(_order)
 
@@ -295,6 +361,33 @@ func _unhandled_input(event: InputEvent) -> void:
 	if not GameState.is_playing() or GameState.camera_state == "TRANSITIONING" or GameState.camera_state == "MENU_VIEW":
 		return
 
+	# Handle ghost rotation if no part is held
+	if GameState.held_part == null and ghost_root != null:
+		if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_RIGHT:
+			_ghost_rmb_held = event.pressed
+			if _ghost_rmb_held:
+				Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+				if ghost_root is RigidBody3D:
+					ghost_root.collision_mask = 0
+					ghost_root.freeze = true
+			else:
+				Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+				if ghost_root is RigidBody3D:
+					ghost_root.collision_mask = 1
+					ghost_root.freeze = false
+			get_viewport().set_input_as_handled()
+			return
+		elif event is InputEventMouseMotion and _ghost_rmb_held:
+			var motion := event as InputEventMouseMotion
+			var cam := get_viewport().get_camera_3d()
+			if cam:
+				var cam_right := cam.global_transform.basis.x.normalized()
+				var cam_up := cam.global_transform.basis.y.normalized()
+				ghost_root.rotate(cam_up, -motion.relative.x * GHOST_ROT_SPEED)
+				ghost_root.rotate(cam_right, -motion.relative.y * GHOST_ROT_SPEED)
+			get_viewport().set_input_as_handled()
+			return
+
 	if event is InputEventKey and event.pressed and not event.is_echo():
 		if event.keycode == KEY_TAB:
 			_on_view_toggle_pressed()
@@ -304,6 +397,35 @@ func _unhandled_input(event: InputEvent) -> void:
 			GameState.set_active_tool("none")
 			_update_tool_buttons()
 			get_viewport().set_input_as_handled()
+
+
+func _apply_ghost_material(ghost: Node3D) -> void:
+	var mat := StandardMaterial3D.new()
+	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	# Brighter neon green with higher opacity
+	mat.albedo_color = Color(0.4, 1.0, 0.5, 0.45)
+	
+	# Enable emission for a glowing effect
+	mat.emission_enabled = true
+	mat.emission = Color(0.3, 1.0, 0.4)
+	mat.emission_energy_multiplier = 1.5
+	
+	# Use unshaded so it's always fully bright regardless of room lighting
+	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	mat.no_depth_test = true # Still draw on top of solid objects
+	mat.cull_mode = BaseMaterial3D.CULL_DISABLED
+	
+	var meshes = _find_all_meshes(ghost)
+	for mesh in meshes:
+		mesh.material_override = mat
+
+func _find_all_meshes(node: Node) -> Array[MeshInstance3D]:
+	var result: Array[MeshInstance3D] = []
+	if node is MeshInstance3D:
+		result.append(node)
+	for child in node.get_children():
+		result.append_array(_find_all_meshes(child))
+	return result
 
 func _input(event: InputEvent) -> void:
 	if not GameState.is_playing() or GameState.camera_state == "TRANSITIONING" or GameState.camera_state == "MENU_VIEW":
@@ -703,6 +825,37 @@ func _on_trust_me_pressed() -> void:
 		result_label.text = "❌ Nothing is attached yet!\nGrab some junk from the boxes!"
 		return
 
+	# ── Blueprint 3D Evaluation (ghost coverage) ─────────────────────────
+	if ghost_root != null:
+		var bp_result = blueprint_evaluator.evaluate(assembly_pivot)
+		var pct: int = bp_result["percentage"]
+		var matched: int = bp_result["matched_count"]
+		var total: int = bp_result["total_ghost_pieces"]
+		var grade: String = evaluation_system.grade_label(pct)
+
+		var detail := "━━━ BLUEPRINT EVAL ━━━\n%s\nMatched: %d / %d pieces (%d%%)\n\n" % [grade, matched, total, pct]
+		for piece in bp_result["pieces"]:
+			var icon := "✅" if piece["matched"] else "❌"
+			var cov_pct: int = int(piece["coverage"] * 100.0)
+			var parts_used: int = piece["overlapping_parts"]
+			detail += "%s %s: %d%% filled (%d parts)\n" % [icon, piece["ghost_label"], cov_pct, parts_used]
+			
+		var spill_ratio = bp_result.get("spill_ratio", 0.0)
+		var spill_pct: int = int(spill_ratio * 100.0)
+		detail += "\n⚠️ Spill Penalty: %d%% of outside space filled\n" % spill_pct
+		
+		if pct >= 40:
+			if spill_ratio > 0.10:
+				detail += "\n❌ FAILED! You spilled too much material outside the ghost bounds! (Max 15%)"
+			else:
+				detail += "\n🎉 SUCCESS! Loading next ghost blueprint in 3 seconds..."
+				var reset_func = func():
+					_on_skip_pressed()
+				get_tree().create_timer(3.0).timeout.connect(reset_func)
+			
+		result_label.text = detail
+		return
+
 	# ── Silhouette Evaluation (if blueprint texture is assigned) ─────────
 	if _order.blueprint_silhouette != null:
 		_enter_eval_view()
@@ -821,6 +974,18 @@ func _on_reset_pressed() -> void:
 		result_label.text = "Assembly cleared. Grab some parts from the boxes!"
 	if part_name_label:
 		part_name_label.text = "Holding: nothing"
+
+func _on_skip_pressed() -> void:
+	# Clear the parts first
+	_on_reset_pressed()
+	
+	# Delete the old ghost
+	if is_instance_valid(ghost_root):
+		ghost_root.queue_free()
+		ghost_root = null
+		
+	# Spawn a new random ghost
+	_setup_order()
 
 # ── Nail tool signal handlers ─────────────────────────────────────────────────
 func _on_nail_placed(nail: Nail) -> void:

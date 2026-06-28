@@ -81,13 +81,18 @@ func _unhandled_input(event: InputEvent) -> void:
 			get_viewport().set_input_as_handled()
 			return
 
-	# ── RMB mouse motion: Skyrim-style object-centered rotation ──────────────
+	# ── RMB mouse motion: camera-relative rotation ──────────────────────────
 	if event is InputEventMouseMotion and _rmb_held:
 		var motion := event as InputEventMouseMotion
-		# rotate_object_local spins the part around its own center of mass
-		# on its local axes, giving smooth infinite non-locking rotation
-		rotate_object_local(Vector3.UP, -motion.relative.x * RMB_ROT_SPEED)
-		rotate_object_local(Vector3.RIGHT, -motion.relative.y * RMB_ROT_SPEED)
+		var cam := get_viewport().get_camera_3d()
+		if cam:
+			# Rotate around the camera's right axis (horizontal drag → pitch)
+			# and the camera's up axis (vertical drag → yaw),
+			# so rotation always feels intuitive from the player's viewpoint.
+			var cam_right := cam.global_transform.basis.x.normalized()
+			var cam_up := cam.global_transform.basis.y.normalized()
+			rotate(cam_up, -motion.relative.x * RMB_ROT_SPEED)
+			rotate(cam_right, -motion.relative.y * RMB_ROT_SPEED)
 		# Propagate rotation to cluster members
 		_update_cluster_transforms()
 		get_viewport().set_input_as_handled()
@@ -139,9 +144,14 @@ func setup(data: ItemData) -> void:
 				else:
 					total_aabb = total_aabb.merge(transformed_aabb)
 
+		var scale_factor := 1.0
+
 		# Center the mesh node so rotation centers properly
 		if has_aabb:
-			_mesh_node.position = -total_aabb.get_center()
+			var max_d = max(total_aabb.size.x, max(total_aabb.size.y, total_aabb.size.z))
+			scale_factor = 0.4 / max_d if max_d > 0.001 else 1.0
+			_mesh_node.position = -total_aabb.get_center() * scale_factor
+			_mesh_node.scale = Vector3.ONE * scale_factor
 
 		# 2. Generate convex collision shape
 		for mesh_inst in meshes:
@@ -152,19 +162,19 @@ func setup(data: ItemData) -> void:
 					col.shape = shape
 					# Offset by the mesh node position we just applied!
 					var rel = _get_relative_transform(_mesh_node, mesh_inst)
-					col.transform = Transform3D(rel.basis, _mesh_node.position + rel.origin)
+					col.transform = Transform3D(rel.basis * scale_factor, _mesh_node.position + (rel.origin * scale_factor))
 					add_child(col)
 					has_custom_collision = true
 		
 		if has_aabb:
-			vol = total_aabb.size.x * total_aabb.size.y * total_aabb.size.z
-			_model_half_height = total_aabb.size.y * 0.5
-			max_dim = max(total_aabb.size.x, max(total_aabb.size.y, total_aabb.size.z))
+			vol = (total_aabb.size.x * scale_factor) * (total_aabb.size.y * scale_factor) * (total_aabb.size.z * scale_factor)
+			_model_half_height = (total_aabb.size.y * scale_factor) * 0.5
+			max_dim = max(total_aabb.size.x, max(total_aabb.size.y, total_aabb.size.z)) * scale_factor
 			
 		if not has_custom_collision:
 			var col := CollisionShape3D.new()
 			var box := BoxShape3D.new()
-			box.size = total_aabb.size if has_aabb else data.size
+			box.size = (total_aabb.size * scale_factor) if has_aabb else data.size
 			col.shape = box
 			# Since mesh is centered, the BoxShape is naturally centered at origin as well
 			add_child(col)
@@ -193,7 +203,7 @@ func setup(data: ItemData) -> void:
 	mass = clampf(vol * 800.0, 0.2, 10.0)  # ~density of wood/plastic
 
 	# Scale dynamically so the models are small and not gigantic
-	var target_dim: float = 0.2
+	var target_dim: float = 0.25
 	var scale_factor = target_dim / max_dim if max_dim > 0.001 else 1.0
 
 	for child in get_children():
