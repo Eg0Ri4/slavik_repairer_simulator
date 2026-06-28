@@ -9,7 +9,6 @@ var camera_controller: Node3D
 var assembly_pivot: Node3D
 var table: Node3D
 var attachment_system: AttachmentSystem
-var evaluation_system: EvaluationSystem
 var blueprint_evaluator
 var nail_tool: NailTool
 var tape_tool: TapeTool
@@ -41,9 +40,7 @@ var part_name_label: Label
 var instructions_label: Label
 var nail_status_label: Label
 
-# Silhouette overlay (shown during evaluation)
-var _silhouette_overlay: TextureRect = null
-var _eval_back_btn: Button = null
+
 
 # Hover highlight state
 var _hovered_box: JunkBox = null
@@ -143,9 +140,6 @@ func _build_systems() -> void:
 	attachment_system.name = "AttachmentSystem"
 	add_child(attachment_system)
 
-	evaluation_system = EvaluationSystem.new()
-	evaluation_system.name = "EvaluationSystem"
-	add_child(evaluation_system)
 
 	var evaluator_script = load("res://scripts/BlueprintEvaluator.gd")
 	blueprint_evaluator = evaluator_script.new()
@@ -301,22 +295,7 @@ func _build_ui() -> void:
 	skip_btn.pressed.connect(_on_skip_pressed)
 	_hud_root.add_child(skip_btn)
 
-	# ── Silhouette overlay (hidden until evaluation) ──────────────────────────
-	_silhouette_overlay = TextureRect.new()
-	_silhouette_overlay.name = "SilhouetteOverlay"
-	_silhouette_overlay.visible = false
-	_silhouette_overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_silhouette_overlay.modulate = Color(1, 1, 1, 0.4)  # semi-transparent
-	_silhouette_overlay.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-	_silhouette_overlay.set_anchors_and_offsets_preset(Control.PRESET_CENTER)
-	_silhouette_overlay.custom_minimum_size = Vector2(400, 400)
-	ui_layer.add_child(_silhouette_overlay)
 
-	# ── Back from eval button (hidden until evaluation) ───────────────────────
-	_eval_back_btn = _make_button("↩ BACK TO WORKSPACE", Vector2(10, 10), Vector2(220, 40))
-	_eval_back_btn.visible = false
-	_eval_back_btn.pressed.connect(_exit_eval_view)
-	ui_layer.add_child(_eval_back_btn)
 
 # ── Order setup ──────────────────────────────────────────────────────────────
 func _setup_order() -> void:
@@ -856,7 +835,7 @@ func evaluate_score(is_submit: bool = false) -> void:
 	if _order == null or result_label == null:
 		return
 
-	# ── Time Attack: record pending score before evaluation display ───────────
+	# ── Time Attack: record pending stats before evaluation display ───────────
 	if _time_attack and is_submit:
 		_time_attack.on_evaluation_submitted(blueprint_evaluator, ghost_root)
 	# ─────────────────────────────────────────────────────────────────────────
@@ -880,14 +859,14 @@ func evaluate_score(is_submit: bool = false) -> void:
 		var spill_ratio = bp_result.get("spill_ratio", 0.0)
 		var spill_pct: int = int(spill_ratio * 100.0)
 		
-		# Separate base score and final score for clarity
+		# Separate base percentage and final percentage for clarity
 		var base_pct: int = pct
 		var final_pct: int = max(0, base_pct - spill_pct)
 		
 		var detail := "━━━ BLUEPRINT EVAL ━━━\nMatched: %d / %d pieces\n" % [matched, total]
 		detail += "▶ Base Coverage: %d%%\n" % base_pct
 		detail += "▶ Spill Penalty: -%d%%\n" % spill_pct
-		detail += "▶ Final Score: %d%%\n\n" % final_pct
+		detail += "▶ Final Match: %d%%\n\n" % final_pct
 		
 		var piece_index := 1
 		for piece in bp_result["pieces"]:
@@ -919,95 +898,11 @@ func evaluate_score(is_submit: bool = false) -> void:
 func _on_trust_me_pressed() -> void:
 	evaluate_score(true)
 
-	# ── Silhouette Evaluation (if blueprint texture is assigned) ─────────
-	if _order.blueprint_silhouette != null:
-		_enter_eval_view()
-		return
 
-	# ── Fallback: Legacy spatial-tag evaluation ──────────────────────────
-	_run_legacy_evaluation()
-
-
-## Enter the orthographic evaluation view with silhouette overlay.
-func _enter_eval_view() -> void:
-	var cc = get_node_or_null("CameraController")
-	if cc == null or not cc.has_method("enter_eval_view"):
-		_run_legacy_evaluation()
-		return
-
-	# Switch camera to orthographic
-	var eval_cam: Camera3D = cc.enter_eval_view()
-	if eval_cam == null:
-		_run_legacy_evaluation()
-		return
-
-	# Show the silhouette overlay
-	if _silhouette_overlay and _order.blueprint_silhouette:
-		_silhouette_overlay.texture = _order.blueprint_silhouette
-		_silhouette_overlay.visible = true
-
-	# Show the back button
-	if _eval_back_btn:
-		_eval_back_btn.visible = true
-
-	# Run the silhouette evaluation after a brief delay (let camera settle)
-	await get_tree().create_timer(0.1).timeout
-	var sil_result = evaluation_system.evaluate_silhouette(eval_cam, _order, assembly_pivot)
-
-	var pct: int = sil_result["percentage"]
-	var passed: bool = sil_result["passed"]
-	var detail: String = sil_result["detail"]
-	var grade: String = evaluation_system.grade_label(pct)
-
-	if result_label:
-		result_label.text = "━━━ SILHOUETTE EVAL ━━━\n%s\n%s" % [grade, detail]
-		if passed:
-			result_label.text += "\n🎉 PASSED! You're a real engineer!"
-		else:
-			result_label.text += "\n🔧 Keep tweaking... (need %d%%)" % int(_order.pass_tolerance)
-
-
-## Exit the evaluation view and return to workspace.
-func _exit_eval_view() -> void:
-	if _silhouette_overlay:
-		_silhouette_overlay.visible = false
-	if _eval_back_btn:
-		_eval_back_btn.visible = false
-
-	var cc = get_node_or_null("CameraController")
-	if cc and cc.has_method("exit_eval_view"):
-		cc.exit_eval_view()
-
-
-## Legacy spatial-tag evaluation (fallback when no blueprint_silhouette).
-func _run_legacy_evaluation() -> void:
-	var eval_result := evaluation_system.evaluate(assembly_pivot, _order)
-	var pct: int    = eval_result["percentage"]
-	var grade: String = evaluation_system.grade_label(pct)
-	var score: int  = eval_result["total_score"]
-	var max_s: int  = eval_result["max_score"]
-
-	var detail: String = ""
-	for req in eval_result["requirements"]:
-		var tag: String    = req["tag"]
-		var earned: int    = req["points_earned"]
-		var possible: int  = req["points_possible"]
-		var found: bool    = req["found"]
-		var icon: String   = "✅" if earned == possible else ("⚠️" if earned > 0 else "❌")
-		if not found:
-			detail += "%s [%s]: Not found (0/%d pts)\n" % [icon, tag, possible]
-		else:
-			var dist: float = req["distance"]
-			detail += "%s [%s]: %.2fm away (%d/%d pts)\n" % [icon, tag, dist, earned, possible]
-
-	if result_label:
-		result_label.text = "━━━ EVALUATION ━━━\n%s\nScore: %d / %d (%d%%)\n\n%s" % [
-			grade, score, max_s, pct, detail
-		]
 
 func _on_reset_pressed() -> void:
-	# Exit eval view if active
-	_exit_eval_view()
+	if result_label:
+		result_label.text = "Assembly cleared. Grab some parts from the boxes!"
 
 	# Free any cluster members currently held (reparented under Main)
 	for part: Node3D in GameState.held_cluster:
@@ -1038,7 +933,7 @@ func _on_reset_pressed() -> void:
 	if part_name_label:
 		part_name_label.text = "Holding: nothing"
 
-	# ── Time Attack: bank pending score + generate next order ─────────────────
+	# ── Time Attack: bank pending stats + generate next order ─────────────────
 	if _time_attack:
 		_time_attack.on_clear_pressed()
 	# ─────────────────────────────────────────────────────────────────────────

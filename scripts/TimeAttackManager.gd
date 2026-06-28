@@ -78,10 +78,9 @@ signal time_up(total_score: int, orders_completed: int)
 
 # ── State ────────────────────────────────────────────────────────────────────
 var _time_left:         float = TOTAL_TIME
-var _total_score:       int   = 0
 var _orders_completed:  int   = 0
-var _last_eval_score:   int   = 0     # score from the most recent TRUST ME press
 var _last_eval_pct:     int   = 0     # percentage from most recent evaluation
+var _last_parts_used:   int   = 0     # parts used in the most recent evaluation
 var _running:           bool  = false
 var _input_blocked:     bool  = false
 
@@ -96,7 +95,6 @@ var _pct_history:  Array[int]  = []  # final_pct for each submitted order
 # ── Internal UI (built by this manager; no Main.gd edits needed for the panel) ─
 var _hud_panel:       Panel  = null
 var _timer_label:     Label  = null
-var _score_label:     Label  = null
 var _orders_label:    Label  = null
 var _time_up_overlay: Control = null
 
@@ -123,10 +121,9 @@ func _process(delta: float) -> void:
 ## Start (or restart) the time-attack mode.
 func start() -> void:
 	_time_left        = TOTAL_TIME
-	_total_score      = 0
 	_orders_completed = 0
-	_last_eval_score  = 0
 	_last_eval_pct         = 0
+	_last_parts_used       = 0
 	_submitted_this_order  = false
 	_total_parts_used      = 0
 	_pct_history           = []
@@ -155,27 +152,17 @@ func on_evaluation_submitted(bp_evaluator, ghost_root: Node3D) -> void:
 	# Mark that TRUST ME was pressed for this order — skip won't count it.
 	_submitted_this_order = true
 
-	# Count how many parts the player placed this attempt.
 	var pivot: Node3D = get_parent().get_node_or_null("AssemblyPivot")
-	if pivot:
-		var count: int = 0
-		for child in pivot.get_children():
-			if child.get_script() != null and child.get_script().get_global_name() == "JunkPart":
-				count += 1
-		_total_parts_used += count
-
 	if ghost_root != null and bp_evaluator != null:
 		var bp_result: Dictionary = bp_evaluator.evaluate(pivot)
 		var spill_ratio: float    = bp_result.get("spill_ratio", 0.0)
 		var base_pct: int         = bp_result.get("percentage", 0)
 		var final_pct: int        = max(0, base_pct - int(spill_ratio * 100.0))
 		_last_eval_pct            = final_pct
-		# Bank 0–300 raw points scaled from the 0-100% blueprint score.
-		_last_eval_score = _pct_to_points(final_pct)
+		_last_parts_used = bp_result.get("parts_used", 0)
 	else:
-		# Fallback: legacy spatial-tag mode — no ghost present.
-		_last_eval_score = 0
 		_last_eval_pct   = 0
+		_last_parts_used = 0
 
 ## Call this from Main._on_reset_pressed(), at the very end of that function.
 ## Banks score and stats ONLY if TRUST ME was pressed for this order.
@@ -185,15 +172,14 @@ func on_clear_pressed() -> void:
 		return
 
 	if _submitted_this_order:
-		_total_score      += _last_eval_score
 		_orders_completed += 1
 		_pct_history.append(_last_eval_pct)
+		_total_parts_used += _last_parts_used
 
 	# Always reset per-order state regardless of whether it was submitted.
 	_submitted_this_order = false
-	_last_eval_score      = 0
 	_last_eval_pct        = 0
-
+	_last_parts_used      = 0
 	_refresh_hud_labels()
 	_emit_new_order()
 
@@ -208,46 +194,10 @@ func generate_random_order() -> OrderData:
 	order.pass_tolerance    = 40.0
 	order.tolerance         = 0.5
 
-	# Pick 2–4 distinct tags; guarantee the toy's primary tag is included
-	var req_count: int      = randi_range(MIN_REQS, MAX_REQS)
-	var chosen_tags: Array[String] = []
-	chosen_tags.append(toy["primary"])
+	order.requirements = []
+	order.required_component_tags = []
 
-	var pool: Array[String] = ALL_TAGS.duplicate()
-	pool.erase(toy["primary"])
-	pool.shuffle()
-
-	for i in range(req_count - 1):
-		if pool.is_empty():
-			break
-		chosen_tags.append(pool.pop_front())
-
-	# Build legacy requirements (spatial-tag evaluation fallback)
-	order.requirements              = []
-	order.required_component_tags   = []
-	var descriptions: Array[String] = []
-
-	for i in range(chosen_tags.size()):
-		var tag: String = chosen_tags[i]
-		order.required_component_tags.append(tag)
-
-		# Spread parts vertically around the origin; alternate sides for > 2 parts
-		var y_spread: float  = lerp(0.25, -0.25, float(i) / float(max(chosen_tags.size() - 1, 1)))
-		var x_offset: float  = 0.0
-		var z_offset: float  = 0.0
-		if chosen_tags.size() > 2:
-			x_offset = 0.1 * (1 if i % 2 == 0 else -1)
-
-		order.requirements.append({
-			"required_tag":    tag,
-			"target_position": Vector3(x_offset, y_spread, z_offset),
-			"points":          _tag_point_value(tag)
-		})
-		descriptions.append("• " + TAG_DISPLAY.get(tag, tag).capitalize())
-
-	order.client_description = (
-		"We need a working %s, fast!\nInclude:\n%s" % [toy["name"], "\n".join(descriptions)]
-	)
+	order.client_description = "We need a working %s, fast!\nPlease assemble it according to the blueprint." % toy["name"]
 
 	return order
 
@@ -257,30 +207,6 @@ func _emit_new_order() -> void:
 	var order: OrderData = generate_random_order()
 	order_generated.emit(order)
 
-func _pct_to_points(pct: int) -> int:
-	## Converts 0-100% into 0-300 raw points.
-	## <40%  → 0 pts (fail)
-	## 40–69%  → 50–149 pts (linearly)
-	## 70–89%  → 150–224 pts (linearly)
-	## 90–100% → 225–300 pts (linearly)
-	if pct < 40:
-		return 0
-	elif pct < 70:
-		return int(lerp(50.0, 149.0, float(pct - 40) / 30.0))
-	elif pct < 90:
-		return int(lerp(150.0, 224.0, float(pct - 70) / 20.0))
-	else:
-		return int(lerp(225.0, 300.0, float(pct - 90) / 10.0))
-
-func _tag_point_value(tag: String) -> int:
-	## Rare / interesting tags are worth more points.
-	match tag:
-		"core", "motor", "sensor":
-			return 150
-		"blade", "gear", "spring", "valve":
-			return 120
-		_:
-			return 80
 
 func _refresh_hud_labels() -> void:
 	var mins:  int = int(_time_left) / 60
@@ -291,22 +217,16 @@ func _refresh_hud_labels() -> void:
 		_timer_label.text = "%02d:%02d" % [mins, secs]
 		_timer_label.modulate = Color(1.0, 0.25, 0.15) if urgent else Color(1.0, 0.9, 0.3)
 
-	if _score_label:
-		_score_label.text = "Score: %d" % _total_score
-		# Show pending score in parentheses so the player knows what Clear will bank.
-		if _last_eval_score > 0:
-			_score_label.text += " (+%d pending)" % _last_eval_score
-
 	if _orders_label:
 		_orders_label.text = "Orders: %d" % _orders_completed
 
-	hud_updated.emit(int(_time_left), _total_score, _orders_completed)
+	hud_updated.emit(int(_time_left), 0, _orders_completed)
 
 func _on_time_up() -> void:
 	_input_blocked = true
 	_refresh_hud_labels()
 	_show_time_up_overlay()
-	time_up.emit(_total_score, _orders_completed)
+	time_up.emit(0, _orders_completed)
 
 # ── HUD Construction ──────────────────────────────────────────────────────────
 
@@ -353,20 +273,14 @@ func _build_hud_panel() -> void:
 	_timer_label.position = Vector2(8, 22)
 	_hud_panel.add_child(_timer_label)
 
-	# Score
-	_score_label = Label.new()
-	_score_label.text     = "Score: 0"
-	_score_label.add_theme_font_size_override("font_size", 13)
-	_score_label.add_theme_color_override("font_color", Color(0.85, 0.85, 0.85))
-	_score_label.position = Vector2(100, 28)
-	_hud_panel.add_child(_score_label)
+
 
 	# Orders counter
 	_orders_label = Label.new()
 	_orders_label.text     = "Orders: 0"
-	_orders_label.add_theme_font_size_override("font_size", 12)
-	_orders_label.add_theme_color_override("font_color", Color(0.7, 0.7, 0.7))
-	_orders_label.position = Vector2(100, 50)
+	_orders_label.add_theme_font_size_override("font_size", 14)
+	_orders_label.add_theme_color_override("font_color", Color(0.85, 0.85, 0.85))
+	_orders_label.position = Vector2(100, 28)
 	_hud_panel.add_child(_orders_label)
 
 	_hud_panel.visible = false   # shown only once start() is called
@@ -411,7 +325,7 @@ func _build_hud_panel() -> void:
 
 	var subtitle_lbl := Label.new()
 	subtitle_lbl.name   = "SubtitleLabel"
-	subtitle_lbl.text   = "Orders completed: 0\nTotal Score: 0"
+	subtitle_lbl.text   = "Orders completed: 0"
 	subtitle_lbl.add_theme_font_size_override("font_size", 20)
 	subtitle_lbl.add_theme_color_override("font_color", Color(0.95, 0.92, 0.88))
 	subtitle_lbl.set_anchors_and_offsets_preset(Control.PRESET_CENTER)
@@ -475,7 +389,7 @@ func _show_time_up_overlay() -> void:
 	# Main stats block.
 	var sub: Label = _time_up_overlay.find_child("SubtitleLabel", true, false)
 	if sub:
-		sub.text = "Orders completed: %d\nTotal Score: %d" % [_orders_completed, _total_score]
+		sub.text = "Orders completed: %d" % _orders_completed
 
 	# Extra stats: parts used + average match %.
 	var stats_lbl: Label = _time_up_overlay.find_child("StatsLabel", true, false)
@@ -485,24 +399,9 @@ func _show_time_up_overlay() -> void:
 
 	var grade_lbl: Label = _time_up_overlay.find_child("GradeLabel", true, false)
 	if grade_lbl:
-		grade_lbl.text = _run_grade(_total_score, _orders_completed)
+		grade_lbl.text = ""
 
 	_time_up_overlay.visible = true
-
-func _run_grade(score: int, orders: int) -> String:
-	if orders == 0:
-		return "Back to engineering school…"
-	var per_order: float = float(score) / float(orders)
-	if per_order >= 250:
-		return "🏆 Legendary Engineer! Pure genius."
-	elif per_order >= 180:
-		return "🥇 Master Craftsperson. Impressive work!"
-	elif per_order >= 120:
-		return "🥈 Solid Engineering. Not bad at all."
-	elif per_order >= 60:
-		return "🥉 Could Use Some Tape."
-	else:
-		return "🔧 Trust me, keep practising…"
 
 func _on_restart_pressed() -> void:
 	if _time_up_overlay:
