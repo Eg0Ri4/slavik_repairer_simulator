@@ -641,6 +641,13 @@ func _extract_from_box(box: JunkBox) -> void:
 		if scene:
 			part.custom_model_scene = scene
 			
+	if box.name == "BoxA":
+		part.custom_scale = 0.001
+	elif box.name == "BoxB":
+		part.custom_scale = 0.2
+	elif box.name == "BoxC":
+		part.custom_scale = 0.25
+			
 	part.setup(item_data)
 	add_child(part)
 	var spawn_pos := assembly_pivot.global_position

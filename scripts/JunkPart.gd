@@ -23,6 +23,9 @@ var _mesh_node: Node3D = null
 ## Cached half-height for vertical alignment when following the mouse
 var _model_half_height: float = 0.05
 
+## Custom scale multiplier applied during setup
+var custom_scale: float = 1.0
+
 # ── Placement state ──────────────────────────────────────────────────────────
 var _follow_plane_y: float = 0.07   # height of table surface in world space
 
@@ -149,7 +152,7 @@ func setup(data: ItemData) -> void:
 		# Center the mesh node so rotation centers properly
 		if has_aabb:
 			var max_d = max(total_aabb.size.x, max(total_aabb.size.y, total_aabb.size.z))
-			scale_factor = 0.4 / max_d if max_d > 0.001 else 1.0
+			scale_factor = 1.0
 			_mesh_node.position = -total_aabb.get_center() * scale_factor
 			_mesh_node.scale = Vector3.ONE * scale_factor
 
@@ -203,8 +206,7 @@ func setup(data: ItemData) -> void:
 	mass = clampf(vol * 800.0, 0.2, 10.0)  # ~density of wood/plastic
 
 	# Scale dynamically so the models are small and not gigantic
-	var target_dim: float = 0.25
-	var scale_factor = target_dim / max_dim if max_dim > 0.001 else 1.0
+	var scale_factor = custom_scale
 
 	for child in get_children():
 		if child is Node3D:

@@ -3,13 +3,13 @@
 importer="scene"
 importer_version=1
 type="PackedScene"
-uid="uid://4p2unwypuegq"
-path="res://.godot/imported/stakan.glb-2d9130e701d17fb910f00aa13ac2ca06.scn"
+uid="uid://btc82g2s5hano"
+path="res://.godot/imported/wino.glb-238bbc0a1d2fb3cba118079b746eee7f.scn"
 
 [deps]
 
-source_file="res://assets/models/boxC/stakan.glb"
-dest_files=["res://.godot/imported/stakan.glb-2d9130e701d17fb910f00aa13ac2ca06.scn"]
+source_file="res://assets/models/boxB/wino.glb"
+dest_files=["res://.godot/imported/wino.glb-238bbc0a1d2fb3cba118079b746eee7f.scn"]
 
 [params]
 

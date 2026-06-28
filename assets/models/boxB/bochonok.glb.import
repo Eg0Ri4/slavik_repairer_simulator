@@ -3,13 +3,13 @@
 importer="scene"
 importer_version=1
 type="PackedScene"
-uid="uid://ro4wdf40uwfh"
-path="res://.godot/imported/krishka.glb-faff89622d8ae2739ea11520f803c2c6.scn"
+uid="uid://djf55h8tnfwge"
+path="res://.godot/imported/bochonok.glb-27943725a7feebd32a985a7eb20e278d.scn"
 
 [deps]
 
-source_file="res://assets/models/boxC/krishka.glb"
-dest_files=["res://.godot/imported/krishka.glb-faff89622d8ae2739ea11520f803c2c6.scn"]
+source_file="res://assets/models/boxB/bochonok.glb"
+dest_files=["res://.godot/imported/bochonok.glb-27943725a7feebd32a985a7eb20e278d.scn"]
 
 [params]
 
