@@ -1,4 +1,4 @@
-# Trust Me, I'm an Engineer 🔧
+# Trust Me, I'm an Engineer ⚙
 
 A Game Jam game built in Godot 4.3 — repair objects using junk at a workbench!
 

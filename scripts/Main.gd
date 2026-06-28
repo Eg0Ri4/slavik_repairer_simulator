@@ -187,7 +187,7 @@ func _build_ui() -> void:
 
 	order_title_label = Label.new()
 	order_title_label.name = "OrderTitle"
-	order_title_label.text = "📋 REPAIR ORDER"
+	order_title_label.text = "☰ REPAIR ORDER"
 	order_title_label.add_theme_font_size_override("font_size", 16)
 	order_title_label.position = Vector2(10, 10)
 	panel.add_child(order_title_label)
@@ -222,7 +222,7 @@ func _build_ui() -> void:
 	_hud_root.add_child(tool_panel)
 
 	var tool_title := Label.new()
-	tool_title.text = "🔧 ATTACHMENT TOOL"
+	tool_title.text = "⚙ ATTACHMENT TOOL"
 	tool_title.add_theme_font_size_override("font_size", 14)
 	tool_title.position = Vector2(10, 10)
 	tool_panel.add_child(tool_title)
@@ -232,22 +232,22 @@ func _build_ui() -> void:
 	tool_hbox.size = Vector2(300, 32)
 	tool_panel.add_child(tool_hbox)
 
-	tool_tape_btn = _make_button("📎 TAPE", Vector2.ZERO, Vector2(80, 32))
+	tool_tape_btn = _make_button("☍ TAPE", Vector2.ZERO, Vector2(80, 32))
 	tool_tape_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	tool_tape_btn.pressed.connect(_on_tape_pressed)
 	tool_hbox.add_child(tool_tape_btn)
 
-	tool_nail_btn = _make_button("🔨 NAIL", Vector2.ZERO, Vector2(80, 32))
+	tool_nail_btn = _make_button("⚒ NAIL", Vector2.ZERO, Vector2(80, 32))
 	tool_nail_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	tool_nail_btn.pressed.connect(_on_nail_pressed)
 	tool_hbox.add_child(tool_nail_btn)
 
-	tool_crowbar_btn = _make_button("🪝 CROWBAR", Vector2.ZERO, Vector2(80, 32))
+	tool_crowbar_btn = _make_button("⛏ CROWBAR", Vector2.ZERO, Vector2(80, 32))
 	tool_crowbar_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	tool_crowbar_btn.pressed.connect(_on_crowbar_pressed)
 	tool_hbox.add_child(tool_crowbar_btn)
 
-	tool_clear_btn = _make_button("❌ CLEAR", Vector2.ZERO, Vector2(80, 32))
+	tool_clear_btn = _make_button("× CLEAR", Vector2.ZERO, Vector2(80, 32))
 	tool_clear_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	tool_clear_btn.pressed.connect(_on_clear_pressed)
 	tool_hbox.add_child(tool_clear_btn)
@@ -266,7 +266,7 @@ func _build_ui() -> void:
 
 
 	# ── TRUST ME button ───────────────────────────────────────────────────────
-	trust_me_btn = _make_button("⚡ TRUST ME, I'M AN ENGINEER ⚡", Vector2(10, 410), Vector2(320, 50))
+	trust_me_btn = _make_button("★ TRUST ME, I'M AN ENGINEER ★", Vector2(10, 410), Vector2(320, 50))
 	trust_me_btn.add_theme_font_size_override("font_size", 15)
 	trust_me_btn.add_theme_color_override("font_color", Color(1, 1, 0))
 	trust_me_btn.pressed.connect(_on_trust_me_pressed)
@@ -287,11 +287,11 @@ func _build_ui() -> void:
 	result_panel.add_child(result_label)
 
 	# ── Reset button ──────────────────────────────────────────────────────────
-	var reset_btn := _make_button("🗑 CLEAR ASSEMBLY", Vector2(10, 615), Vector2(155, 36))
+	var reset_btn := _make_button("♺ CLEAR ASSEMBLY", Vector2(10, 615), Vector2(155, 36))
 	reset_btn.pressed.connect(_on_reset_pressed)
 	_hud_root.add_child(reset_btn)
 
-	var skip_btn := _make_button("⏭ SKIP ORDER", Vector2(175, 615), Vector2(155, 36))
+	var skip_btn := _make_button("» SKIP ORDER", Vector2(175, 615), Vector2(155, 36))
 	skip_btn.pressed.connect(_on_skip_pressed)
 	_hud_root.add_child(skip_btn)
 
@@ -362,7 +362,7 @@ func _setup_order() -> void:
 ## Dynamically populate the REPAIR ORDER UI card from the loaded .tres resource.
 func _populate_order_ui(order: OrderData) -> void:
 	if order_title_label:
-		order_title_label.text = "📋 %s" % order.toy_name
+		order_title_label.text = "☰ %s" % order.toy_name
 	if order_desc_label:
 		order_desc_label.text = order.client_description
 
@@ -826,7 +826,7 @@ func _update_tool_buttons() -> void:
 			"tape":
 				nail_status_label.text = "Click two surface points to tape them together (wobbly)"
 			"none":
-				nail_status_label.text = "✋ Hand mode — parts drop freely (click tool to select)"
+				nail_status_label.text = "☞ Hand mode — parts drop freely (click tool to select)"
 			_:
 				nail_status_label.text = ""
 
@@ -846,7 +846,7 @@ func evaluate_score(is_submit: bool = false) -> void:
 			placed_count += 1
 
 	if placed_count == 0:
-		result_label.text = "❌ Nothing is attached yet!\nGrab some junk from the boxes!"
+		result_label.text = "× Nothing is attached yet!\nGrab some junk from the boxes!"
 		return
 
 	# ── Blueprint 3D Evaluation (ghost coverage) ─────────────────────────
@@ -870,7 +870,7 @@ func evaluate_score(is_submit: bool = false) -> void:
 		
 		var piece_index := 1
 		for piece in bp_result["pieces"]:
-			var icon := "✅" if piece["matched"] else "❌"
+			var icon := "✓" if piece["matched"] else "×"
 			var cov_pct: int = int(piece["coverage"] * 100.0)
 			var parts_used: int = piece["overlapping_parts"]
 			detail += "%s Part %d: %d%% filled (%d parts)\n" % [icon, piece_index, cov_pct, parts_used]
@@ -878,17 +878,17 @@ func evaluate_score(is_submit: bool = false) -> void:
 		
 		if final_pct >= 30:
 			if spill_ratio > 0.08:
-				detail += "\n❌ FAILED! You spilled too much material outside the ghost bounds! (Max 8%)"
+				detail += "\n× FAILED! You spilled too much material outside the ghost bounds! (Max 8%)"
 				blueprint_evaluator.set_ghost_visible(true)
 			else:
 				blueprint_evaluator.set_ghost_visible(false)
 				if is_submit:
-					detail += "\n🎉 SUCCESS! Loading next ghost blueprint in 3 seconds..."
+					detail += "\n★ SUCCESS! Loading next ghost blueprint in 3 seconds..."
 					var reset_func = func():
 						_on_skip_pressed()
 					get_tree().create_timer(3.0).timeout.connect(reset_func)
 				else:
-					detail += "\n🎉 PASSED! Press 'Trust Me' to submit when ready!"
+					detail += "\n★ PASSED! Press 'Trust Me' to submit when ready!"
 		else:
 			blueprint_evaluator.set_ghost_visible(true)
 			
@@ -955,49 +955,49 @@ func _on_nail_placed(nail: Nail) -> void:
 	if not nail.nail_unfastened.is_connected(_on_nail_removed):
 		nail.nail_unfastened.connect(_on_nail_removed)
 	if nail_status_label:
-		nail_status_label.text = "🔨 Nail placed! Click it to hammer in (%d%%)" % int(nail.get_progress() * 100)
+		nail_status_label.text = "⚒ Nail placed! Click it to hammer in (%d%%)" % int(nail.get_progress() * 100)
 
 func _on_nail_strike(progress: float) -> void:
 	if nail_status_label:
 		var pct := int(progress * 100)
 		if GameState.active_tool == "crowbar":
 			if pct <= 0:
-				nail_status_label.text = "🪝 Nail removed!"
+				nail_status_label.text = "⛏ Nail removed!"
 			else:
-				nail_status_label.text = "🪝 Pulling out... %d%%" % pct
+				nail_status_label.text = "⛏ Pulling out... %d%%" % pct
 		else:
 			if pct >= 100:
-				nail_status_label.text = "✅ Nail fully driven! Objects fastened."
+				nail_status_label.text = "✓ Nail fully driven! Objects fastened."
 			else:
-				nail_status_label.text = "🔨 Hammering... %d%%" % pct
+				nail_status_label.text = "⚒ Hammering... %d%%" % pct
 
 func _on_nail_driven(nail: Nail) -> void:
 	if nail_status_label:
-		nail_status_label.text = "✅ Nail fastened! Place another or switch tools."
+		nail_status_label.text = "✓ Nail fastened! Place another or switch tools."
 
 	call_deferred("_recalculate_assembly_collisions")
 
 func _on_nail_placement_blocked(reason: String) -> void:
 	if nail_status_label:
-		nail_status_label.text = "⚠️ %s" % reason
+		nail_status_label.text = "! %s" % reason
 
 # ── Tape tool signal handlers ─────────────────────────────────────────────────
 func _on_tape_started() -> void:
 	if nail_status_label:
-		nail_status_label.text = "📍 Tape start set! Click the end point."
+		nail_status_label.text = "⚑ Tape start set! Click the end point."
 
 func _on_tape_finished() -> void:
 	if nail_status_label:
-		nail_status_label.text = "✅ Taped! Place another or switch tools."
+		nail_status_label.text = "✓ Taped! Place another or switch tools."
 	call_deferred("_recalculate_assembly_collisions")
 
 func _on_tape_canceled() -> void:
 	if nail_status_label:
-		nail_status_label.text = "❌ Tape canceled."
+		nail_status_label.text = "× Tape canceled."
 		
 func _on_tape_placement_blocked(reason: String) -> void:
 	if nail_status_label:
-		nail_status_label.text = "⚠️ %s" % reason
+		nail_status_label.text = "! %s" % reason
 
 # ── GameState signal handlers ─────────────────────────────────────────────────
 func _on_camera_state_changed(new_state: String) -> void:

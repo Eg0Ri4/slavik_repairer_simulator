@@ -247,7 +247,7 @@ func _evaluate_ghost_coverage(ghost: Area3D, part_shapes: Array[Dictionary]) -> 
 	if debug_logging:
 		print("[BlueprintEvaluator] %s: %d/%d points filled (%.0f%%) — %s" % [
 			label, filled_points, total_points, coverage * 100.0,
-			"✅ MATCHED" if matched else "❌ NOT MATCHED"
+			"✓ MATCHED" if matched else "× NOT MATCHED"
 		])
 
 	return {
