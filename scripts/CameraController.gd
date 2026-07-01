@@ -40,10 +40,10 @@ func _ready() -> void:
 	_game_cam = get_node_or_null(GAME_CAM_NAME)
 
 	if _menu_cam == null:
-		push_error("CameraController: нет дочерней ноды '%s'" % MENU_CAM_NAME)
+		push_error("CameraController: no child node '%s'" % MENU_CAM_NAME)
 		return
 	if _game_cam == null:
-		push_error("CameraController: нет дочерней ноды '%s'" % GAME_CAM_NAME)
+		push_error("CameraController: no child node '%s'" % GAME_CAM_NAME)
 		return
 
 	# Запоминаем родную позицию GameCamera (TABLE_VIEW) — берём из сцены

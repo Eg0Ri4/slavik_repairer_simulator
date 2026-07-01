@@ -29,8 +29,8 @@ extends Node
 @export_range(3, 8) var samples_per_axis: int = 5
 
 ## Minimum coverage ratio (0.0–1.0) for a ghost piece to count as "matched".
-## Set to 0.30 to match the 30% pass requirement.
-@export_range(0.0, 1.0) var coverage_threshold: float = 0.30
+## Set to 0.25 to match the 25% pass requirement.
+@export_range(0.0, 1.0) var coverage_threshold: float = 0.25
 
 ## Margin added to player shapes when checking if they cover ghost points.
 ## Makes the blueprint evaluation more forgiving for slightly misaligned parts.
@@ -245,9 +245,9 @@ func _evaluate_ghost_coverage(ghost: Area3D, part_shapes: Array[Dictionary]) -> 
 	var matched: bool = coverage >= coverage_threshold
 
 	if debug_logging:
-		print("[BlueprintEvaluator] %s: %d/%d points filled (%.0f%%) — %s" % [
+		print("[BlueprintEvaluator] %s: %d/%d points filled (%.0f%%) - %s" % [
 			label, filled_points, total_points, coverage * 100.0,
-			"✓ MATCHED" if matched else "× NOT MATCHED"
+			"[V] MATCHED" if matched else "[X] NOT MATCHED"
 		])
 
 	return {

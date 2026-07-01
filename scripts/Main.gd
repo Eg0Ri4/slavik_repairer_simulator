@@ -187,7 +187,7 @@ func _build_ui() -> void:
 
 	order_title_label = Label.new()
 	order_title_label.name = "OrderTitle"
-	order_title_label.text = "☰ REPAIR ORDER"
+	order_title_label.text = "[=] REPAIR ORDER"
 	order_title_label.add_theme_font_size_override("font_size", 16)
 	order_title_label.position = Vector2(10, 10)
 	panel.add_child(order_title_label)
@@ -203,7 +203,7 @@ func _build_ui() -> void:
 
 	part_name_label = Label.new()
 	part_name_label.name = "PartName"
-	part_name_label.text = "Holding: nothing"
+	part_name_label.text = ""
 	part_name_label.add_theme_color_override("font_color", Color(0.9, 0.8, 0.3))
 	part_name_label.add_theme_font_size_override("font_size", 14)
 	part_name_label.position = Vector2(10, 100)
@@ -211,7 +211,7 @@ func _build_ui() -> void:
 
 	instructions_label = Label.new()
 	instructions_label.name = "Instructions"
-	instructions_label.text = "Hold RMB: rotate held part\nLMB part on table: pick it back up\nClick box: grab part  ·  LMB: place\nScroll: raise/lower held part"
+	instructions_label.text = "Hold RMB: rotate held part\nLMB part on table: pick it back up\nClick box: grab part  |  LMB: place\nScroll: raise/lower held part"
 	instructions_label.add_theme_color_override("font_color", Color(0.75, 0.75, 0.75))
 	instructions_label.add_theme_font_size_override("font_size", 11)
 	instructions_label.position = Vector2(10, 125)
@@ -222,7 +222,7 @@ func _build_ui() -> void:
 	_hud_root.add_child(tool_panel)
 
 	var tool_title := Label.new()
-	tool_title.text = "⚙ ATTACHMENT TOOL"
+	tool_title.text = "* ATTACHMENT TOOL"
 	tool_title.add_theme_font_size_override("font_size", 14)
 	tool_title.position = Vector2(10, 10)
 	tool_panel.add_child(tool_title)
@@ -232,22 +232,22 @@ func _build_ui() -> void:
 	tool_hbox.size = Vector2(300, 32)
 	tool_panel.add_child(tool_hbox)
 
-	tool_tape_btn = _make_button("☍ TAPE", Vector2.ZERO, Vector2(80, 32))
+	tool_tape_btn = _make_button("[-] TAPE", Vector2.ZERO, Vector2(80, 32))
 	tool_tape_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	tool_tape_btn.pressed.connect(_on_tape_pressed)
 	tool_hbox.add_child(tool_tape_btn)
 
-	tool_nail_btn = _make_button("⚒ NAIL", Vector2.ZERO, Vector2(80, 32))
+	tool_nail_btn = _make_button("T NAIL", Vector2.ZERO, Vector2(80, 32))
 	tool_nail_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	tool_nail_btn.pressed.connect(_on_nail_pressed)
 	tool_hbox.add_child(tool_nail_btn)
 
-	tool_crowbar_btn = _make_button("⛏ CROWBAR", Vector2.ZERO, Vector2(80, 32))
+	tool_crowbar_btn = _make_button("J CROWBAR", Vector2.ZERO, Vector2(80, 32))
 	tool_crowbar_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	tool_crowbar_btn.pressed.connect(_on_crowbar_pressed)
 	tool_hbox.add_child(tool_crowbar_btn)
 
-	tool_clear_btn = _make_button("× CLEAR", Vector2.ZERO, Vector2(80, 32))
+	tool_clear_btn = _make_button("X CLEAR", Vector2.ZERO, Vector2(80, 32))
 	tool_clear_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	tool_clear_btn.pressed.connect(_on_clear_pressed)
 	tool_hbox.add_child(tool_clear_btn)
@@ -266,7 +266,7 @@ func _build_ui() -> void:
 
 
 	# ── TRUST ME button ───────────────────────────────────────────────────────
-	trust_me_btn = _make_button("★ TRUST ME, I'M AN ENGINEER ★", Vector2(10, 410), Vector2(320, 50))
+	trust_me_btn = _make_button("* TRUST ME, I'M AN ENGINEER *", Vector2(10, 410), Vector2(320, 50))
 	trust_me_btn.add_theme_font_size_override("font_size", 15)
 	trust_me_btn.add_theme_color_override("font_color", Color(1, 1, 0))
 	trust_me_btn.pressed.connect(_on_trust_me_pressed)
@@ -287,11 +287,11 @@ func _build_ui() -> void:
 	result_panel.add_child(result_label)
 
 	# ── Reset button ──────────────────────────────────────────────────────────
-	var reset_btn := _make_button("♺ CLEAR ASSEMBLY", Vector2(10, 615), Vector2(155, 36))
+	var reset_btn := _make_button("[X] CLEAR ASSEMBLY", Vector2(10, 615), Vector2(155, 36))
 	reset_btn.pressed.connect(_on_reset_pressed)
 	_hud_root.add_child(reset_btn)
 
-	var skip_btn := _make_button("» SKIP ORDER", Vector2(175, 615), Vector2(155, 36))
+	var skip_btn := _make_button(">> SKIP ORDER", Vector2(175, 615), Vector2(155, 36))
 	skip_btn.pressed.connect(_on_skip_pressed)
 	_hud_root.add_child(skip_btn)
 
@@ -301,9 +301,9 @@ func _build_ui() -> void:
 func _setup_order() -> void:
 	_order = OrderData.new()
 	_order.toy_name = "Broken Workshop Fan"
-	_order.client_description = "The workshop fan stopped working! Needs:\n• A BLADE near the top\n• A MOTOR in the center\n• A FRAME at the base"
+	_order.client_description = "The workshop fan stopped working! Needs:\n- A BLADE near the top\n- A MOTOR in the center\n- A FRAME at the base"
 	_order.required_component_tags = []
-	_order.pass_tolerance = 30.0
+	_order.pass_tolerance = 25.0
 	# Legacy requirements for spatial-tag evaluation fallback
 	_order.requirements = []
 	_order.tolerance = 0.5
@@ -318,8 +318,11 @@ func _setup_order() -> void:
 		dir.list_dir_begin()
 		var f = dir.get_next()
 		while f != "":
-			if f.ends_with(".tscn"):
-				ghost_files.append(f)
+			if not dir.current_is_dir():
+				var clean_name = f.trim_suffix(".remap").trim_suffix(".import")
+				if clean_name.ends_with(".tscn"):
+					if not ghost_files.has(clean_name):
+						ghost_files.append(clean_name)
 			f = dir.get_next()
 	
 	if ghost_files.size() > 0:
@@ -362,7 +365,7 @@ func _setup_order() -> void:
 ## Dynamically populate the REPAIR ORDER UI card from the loaded .tres resource.
 func _populate_order_ui(order: OrderData) -> void:
 	if order_title_label:
-		order_title_label.text = "☰ %s" % order.toy_name
+		order_title_label.text = "[=] %s" % order.toy_name
 	if order_desc_label:
 		order_desc_label.text = order.client_description
 
@@ -644,7 +647,7 @@ func _extract_from_box(box: JunkBox) -> void:
 	elif box.name == "BoxB":
 		part.custom_scale = 0.2
 	elif box.name == "BoxC":
-		part.custom_scale = 0.1
+		part.custom_scale = 0.5
 			
 	part.setup(item_data)
 	add_child(part)
@@ -657,6 +660,8 @@ func _extract_from_box(box: JunkBox) -> void:
 	var cc := get_node_or_null("CameraController") as Node3D
 	if cc and cc.has_method("go_to_table_view"):
 		cc.go_to_table_view()
+	if _new_hud:
+		_new_hud._set_tool(HUDController.ToolState.HAND)
 
 func _place_held_part(_mouse_pos: Vector2) -> void:
 	var part := GameState.held_part
@@ -826,7 +831,7 @@ func _update_tool_buttons() -> void:
 			"tape":
 				nail_status_label.text = "Click two surface points to tape them together (wobbly)"
 			"none":
-				nail_status_label.text = "☞ Hand mode — parts drop freely (click tool to select)"
+				nail_status_label.text = "> Hand mode - parts drop freely (click tool to select)"
 			_:
 				nail_status_label.text = ""
 
@@ -846,7 +851,7 @@ func evaluate_score(is_submit: bool = false) -> void:
 			placed_count += 1
 
 	if placed_count == 0:
-		result_label.text = "× Nothing is attached yet!\nGrab some junk from the boxes!"
+		result_label.text = "X Nothing is attached yet!\nGrab some junk from the boxes!"
 		return
 
 	# ── Blueprint 3D Evaluation (ghost coverage) ─────────────────────────
@@ -863,32 +868,29 @@ func evaluate_score(is_submit: bool = false) -> void:
 		var base_pct: int = pct
 		var final_pct: int = max(0, base_pct - spill_pct)
 		
-		var detail := "━━━ BLUEPRINT EVAL ━━━\nMatched: %d / %d pieces\n" % [matched, total]
-		detail += "▶ Base Coverage: %d%%\n" % base_pct
-		detail += "▶ Spill Penalty: -%d%%\n" % spill_pct
-		detail += "▶ Final Match: %d%%\n\n" % final_pct
+		var detail := "=== BLUEPRINT EVAL ===\nMatched: %d / %d pieces\n" % [matched, total]
+		detail += "> Base Coverage: %d%%\n" % base_pct
+		detail += "> Spill Penalty: -%d%%\n" % spill_pct
+		detail += "> Final Match: %d%%\n\n" % final_pct
 		
 		var piece_index := 1
 		for piece in bp_result["pieces"]:
-			var icon := "✓" if piece["matched"] else "×"
+			var icon := "[V]" if piece["matched"] else "[X]"
 			var cov_pct: int = int(piece["coverage"] * 100.0)
 			var parts_used: int = piece["overlapping_parts"]
 			detail += "%s Part %d: %d%% filled (%d parts)\n" % [icon, piece_index, cov_pct, parts_used]
 			piece_index += 1
 		
-		if final_pct >= 30:
+		if final_pct >= _order.pass_tolerance:
 			if spill_ratio > 0.08:
-				detail += "\n× FAILED! You spilled too much material outside the ghost bounds! (Max 8%)"
+				detail += "\nX FAILED! You spilled too much material outside the ghost bounds! (Max 8%)"
 				blueprint_evaluator.set_ghost_visible(true)
 			else:
 				blueprint_evaluator.set_ghost_visible(false)
 				if is_submit:
-					detail += "\n★ SUCCESS! Loading next ghost blueprint in 3 seconds..."
-					var reset_func = func():
-						_on_skip_pressed()
-					get_tree().create_timer(3.0).timeout.connect(reset_func)
+					detail += "\n* SUCCESS! Press 'Skip Order' to continue."
 				else:
-					detail += "\n★ PASSED! Press 'Trust Me' to submit when ready!"
+					detail += "\n* PASSED! Press 'Trust Me' to submit when ready!"
 		else:
 			blueprint_evaluator.set_ghost_visible(true)
 			
@@ -931,7 +933,7 @@ func _on_reset_pressed() -> void:
 	if result_label:
 		result_label.text = "Assembly cleared. Grab some parts from the boxes!"
 	if part_name_label:
-		part_name_label.text = "Holding: nothing"
+		part_name_label.text = ""
 
 	# ── Time Attack: bank pending stats + generate next order ─────────────────
 	if _time_attack:
@@ -955,25 +957,25 @@ func _on_nail_placed(nail: Nail) -> void:
 	if not nail.nail_unfastened.is_connected(_on_nail_removed):
 		nail.nail_unfastened.connect(_on_nail_removed)
 	if nail_status_label:
-		nail_status_label.text = "⚒ Nail placed! Click it to hammer in (%d%%)" % int(nail.get_progress() * 100)
+		nail_status_label.text = "T Nail placed! Click it to hammer in (%d%%)" % int(nail.get_progress() * 100)
 
 func _on_nail_strike(progress: float) -> void:
 	if nail_status_label:
 		var pct := int(progress * 100)
 		if GameState.active_tool == "crowbar":
 			if pct <= 0:
-				nail_status_label.text = "⛏ Nail removed!"
+				nail_status_label.text = "J Nail removed!"
 			else:
-				nail_status_label.text = "⛏ Pulling out... %d%%" % pct
+				nail_status_label.text = "J Pulling out... %d%%" % pct
 		else:
 			if pct >= 100:
-				nail_status_label.text = "✓ Nail fully driven! Objects fastened."
+				nail_status_label.text = "+ Nail fully driven! Objects fastened."
 			else:
-				nail_status_label.text = "⚒ Hammering... %d%%" % pct
+				nail_status_label.text = "T Hammering... %d%%" % pct
 
 func _on_nail_driven(nail: Nail) -> void:
 	if nail_status_label:
-		nail_status_label.text = "✓ Nail fastened! Place another or switch tools."
+		nail_status_label.text = "+ Nail fastened! Place another or switch tools."
 
 	call_deferred("_recalculate_assembly_collisions")
 
@@ -984,16 +986,16 @@ func _on_nail_placement_blocked(reason: String) -> void:
 # ── Tape tool signal handlers ─────────────────────────────────────────────────
 func _on_tape_started() -> void:
 	if nail_status_label:
-		nail_status_label.text = "⚑ Tape start set! Click the end point."
+		nail_status_label.text = "> Tape start set! Click the end point."
 
 func _on_tape_finished() -> void:
 	if nail_status_label:
-		nail_status_label.text = "✓ Taped! Place another or switch tools."
+		nail_status_label.text = "+ Taped! Place another or switch tools."
 	call_deferred("_recalculate_assembly_collisions")
 
 func _on_tape_canceled() -> void:
 	if nail_status_label:
-		nail_status_label.text = "× Tape canceled."
+		nail_status_label.text = "X Tape canceled."
 		
 func _on_tape_placement_blocked(reason: String) -> void:
 	if nail_status_label:
@@ -1006,14 +1008,14 @@ func _on_camera_state_changed(new_state: String) -> void:
 func _on_part_picked_up(part: RigidBody3D) -> void:
 	if part_name_label and part is JunkPart:
 		var jp := part as Node3D
-		part_name_label.text = "Holding: %s [%s]" % [
+		part_name_label.text = "%s [%s]" % [
 			jp.item_data.item_name if jp.item_data else "???",
 			", ".join(jp.tags)
 		]
 
 func _on_part_placed() -> void:
 	if part_name_label:
-		part_name_label.text = "Holding: nothing"
+		part_name_label.text = ""
 
 # ── UI Helpers ────────────────────────────────────────────────────────────────
 func _make_panel(pos: Vector2, sz: Vector2) -> Panel:

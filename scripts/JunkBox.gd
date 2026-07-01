@@ -112,9 +112,12 @@ func _scan_mesh_folder() -> void:
 		var file_name = dir.get_next()
 		while file_name != "":
 			if not dir.current_is_dir():
-				var ext = file_name.get_extension().to_lower()
-				if ext in ["glb", "gltf", "obj", "tscn", "scn"] and not file_name.ends_with(".import"):
-					_mesh_files.append(mesh_folder_path.path_join(file_name))
+				var clean_name = file_name.trim_suffix(".remap").trim_suffix(".import")
+				var ext = clean_name.get_extension().to_lower()
+				if ext in ["glb", "gltf", "obj", "tscn", "scn"]:
+					var full_path = mesh_folder_path.path_join(clean_name)
+					if not _mesh_files.has(full_path):
+						_mesh_files.append(full_path)
 			file_name = dir.get_next()
 
 func _populate_pool() -> void:

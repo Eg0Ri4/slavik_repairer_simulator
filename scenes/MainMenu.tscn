@@ -41,11 +41,11 @@ custom_minimum_size = Vector2(300, 80)
 layout_mode = 2
 size_flags_horizontal = 4
 theme_override_font_sizes/font_size = 32
-text = "▶ PLAY"
+text = ">  PLAY"
 
 [node name="ExitButton" type="Button" parent="ColorRect/CenterContainer/VBoxContainer" unique_id=909102206]
 custom_minimum_size = Vector2(300, 60)
 layout_mode = 2
 size_flags_horizontal = 4
 theme_override_font_sizes/font_size = 24
-text = "✕ EXIT"
+text = "X EXIT"

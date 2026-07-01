@@ -88,13 +88,13 @@ func _update_holding_ui() -> void:
 	if holding_label:
 		match current_tool:
 			ToolState.HAND:
-				holding_label.text = "Holding: Nothing (Hand Mode)"
+				holding_label.text = ""
 			ToolState.TAPE:
-				holding_label.text = "Holding: Duct Tape"
+				holding_label.text = "Tape"
 			ToolState.NAIL:
-				holding_label.text = "Holding: Nails"
+				holding_label.text = "Nails"
 			ToolState.CROWBAR:
-				holding_label.text = "Holding: Crowbar"
+				holding_label.text = "Crowbar"
 
 # ── Button Callbacks ─────────────────────────────────────────────────────────
 func _on_submit_pressed() -> void:

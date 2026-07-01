@@ -72,7 +72,7 @@ alignment = 1
 
 [node name="HoldingLabel" type="Label" parent="MainMargin/BottomCenter" unique_id=935875938]
 layout_mode = 2
-text = "Holding: Wooden Plank"
+text = ""
 horizontal_alignment = 1
 
 [node name="ToolbeltBar" type="HBoxContainer" parent="MainMargin/BottomCenter" unique_id=2039875131]

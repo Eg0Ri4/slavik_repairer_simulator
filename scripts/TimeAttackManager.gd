@@ -259,7 +259,7 @@ func _build_hud_panel() -> void:
 
 	# Mode badge
 	var mode_label := Label.new()
-	mode_label.text     = "◷ 10-MINUTE TIME ATTACK"
+	mode_label.text     = "[T] 10-MINUTE TIME ATTACK"
 	mode_label.add_theme_font_size_override("font_size", 11)
 	mode_label.add_theme_color_override("font_color", Color(0.6, 0.9, 1.0))
 	mode_label.position = Vector2(8, 6)
@@ -313,7 +313,7 @@ func _build_hud_panel() -> void:
 	_time_up_overlay.add_child(card)
 
 	var title_lbl := Label.new()
-	title_lbl.text      = "◷  TIME'S UP!"
+	title_lbl.text      = "[T]  TIME'S UP!"
 	title_lbl.add_theme_font_size_override("font_size", 38)
 	title_lbl.add_theme_color_override("font_color", Color(1.0, 0.85, 0.1))
 	title_lbl.set_anchors_and_offsets_preset(Control.PRESET_CENTER_TOP)
@@ -364,7 +364,7 @@ func _build_hud_panel() -> void:
 	card.add_child(grade_lbl)
 
 	# Restart button
-	var restart_btn := _make_styled_button("↺  PLAY AGAIN")
+	var restart_btn := _make_styled_button("[R]  PLAY AGAIN")
 	restart_btn.set_anchors_and_offsets_preset(Control.PRESET_CENTER_BOTTOM)
 	restart_btn.offset_top    = -30.0
 	restart_btn.offset_bottom =  -6.0
@@ -394,8 +394,8 @@ func _show_time_up_overlay() -> void:
 	# Extra stats: parts used + average match %.
 	var stats_lbl: Label = _time_up_overlay.find_child("StatsLabel", true, false)
 	if stats_lbl:
-		var avg_str: String = "—" if _pct_history.is_empty() else ("%d%%" % int(avg_pct))
-		stats_lbl.text = "Parts used: %d  •  Average match: %s" % [_total_parts_used, avg_str]
+		var avg_str: String = "N/A" if _pct_history.is_empty() else ("%d%%" % int(avg_pct))
+		stats_lbl.text = "Parts used: %d  |  Average match: %s" % [_total_parts_used, avg_str]
 
 	var grade_lbl: Label = _time_up_overlay.find_child("GradeLabel", true, false)
 	if grade_lbl:
