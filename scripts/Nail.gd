@@ -10,7 +10,7 @@ extends RigidBody3D
 ## How far the nail sinks per full-power hit (meters).
 @export var sink_per_hit: float = 0.015
 ## Total depth the nail must travel to be considered fully driven (meters).
-@export var target_depth: float = 0.06
+@export var target_depth: float = 0.075
 ## Tween duration for each sink animation (seconds).
 @export var sink_tween_duration: float = 0.12
 ## Number of strikes needed at full power = target_depth / sink_per_hit.
@@ -43,10 +43,10 @@ var _head_area: Area3D = null
 
 # Nail dimensions
 const SHAFT_RADIUS: float = 0.004
-const SHAFT_HEIGHT: float = 0.06
+const SHAFT_HEIGHT: float = 0.075
 const HEAD_RADIUS: float = 0.008
 const HEAD_HEIGHT: float = 0.004
-const TIP_HEIGHT: float = 0.012
+const TIP_HEIGHT: float = 0.015
 
 # ── Lifecycle ────────────────────────────────────────────────────────────────
 func _ready() -> void:
