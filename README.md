@@ -2,6 +2,10 @@
 
 A Game Jam game built in Godot 4.3 — repair objects using junk at a workbench!
 
+## Demo
+https://eg0ri4.itch.io/bepsik
+
+
 ## How to Play
 
 ### Controls
