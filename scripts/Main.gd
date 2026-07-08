@@ -54,6 +54,8 @@ var _table_y: float = 0.3
 var _ghost_rmb_held: bool = false
 const GHOST_ROT_SPEED: float = 0.005
 
+var _eval_timer: float = 0.0
+
 # ── Lifecycle ────────────────────────────────────────────────────────────────
 func _ready() -> void:
 	camera_controller = $CameraController
@@ -266,7 +268,7 @@ func _build_ui() -> void:
 
 
 	# ── TRUST ME button ───────────────────────────────────────────────────────
-	trust_me_btn = _make_button("* TRUST ME, I'M AN ENGINEER *", Vector2(10, 410), Vector2(320, 50))
+	trust_me_btn = _make_button("skip blueprint", Vector2(10, 410), Vector2(320, 50))
 	trust_me_btn.add_theme_font_size_override("font_size", 15)
 	trust_me_btn.add_theme_color_override("font_color", Color(1, 1, 0))
 	trust_me_btn.pressed.connect(_on_trust_me_pressed)
@@ -279,7 +281,7 @@ func _build_ui() -> void:
 
 	result_label = Label.new()
 	result_label.name = "ResultLabel"
-	result_label.text = "Press 'TRUST ME' to evaluate your repair!"
+	result_label.text = "Press 'skip blueprint' to evaluate your repair!"
 	result_label.add_theme_font_size_override("font_size", 13)
 	result_label.custom_minimum_size = Vector2(300, 110)
 	result_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -303,7 +305,7 @@ func _setup_order() -> void:
 	_order.toy_name = "Broken Workshop Fan"
 	_order.client_description = "The workshop fan stopped working! Needs:\n- A BLADE near the top\n- A MOTOR in the center\n- A FRAME at the base"
 	_order.required_component_tags = []
-	_order.pass_tolerance = 25.0
+	_order.pass_tolerance = 27.0
 	# Legacy requirements for spatial-tag evaluation fallback
 	_order.requirements = []
 	_order.tolerance = 0.5
@@ -767,6 +769,14 @@ func _process(_delta: float) -> void:
 	if GameState.camera_state == "UNDER_TABLE_VIEW":
 		_update_box_hover()
 
+	if GameState.held_part == null:
+		_eval_timer += _delta
+		if _eval_timer > 0.5:
+			_eval_timer = 0.0
+			evaluate_score(false)
+	else:
+		_eval_timer = 0.0
+
 func _update_box_hover() -> void:
 	var mouse_pos := get_viewport().get_mouse_position()
 	var new_hovered := _raycast_for_box(mouse_pos)
@@ -886,11 +896,11 @@ func evaluate_score(is_submit: bool = false) -> void:
 				detail += "\nX FAILED! You spilled too much material outside the ghost bounds! (Max 8%)"
 				blueprint_evaluator.set_ghost_visible(true)
 			else:
-				blueprint_evaluator.set_ghost_visible(false)
+				blueprint_evaluator.set_ghost_visible(true)
 				if is_submit:
 					detail += "\n* SUCCESS! Press 'Skip Order' to continue."
 				else:
-					detail += "\n* PASSED! Press 'Trust Me' to submit when ready!"
+					detail += "\n* PASSED! Press 'skip blueprint' to submit when ready!"
 		else:
 			blueprint_evaluator.set_ghost_visible(true)
 			

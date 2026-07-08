@@ -39,7 +39,7 @@ mouse_filter = 2
 
 [node name="SubmitButton" type="Button" parent="MainMargin/TopLeftCorner/ActionButtons" unique_id=909873816]
 layout_mode = 2
-text = "Submit"
+text = "skip blueprint"
 
 [node name="ClearButton" type="Button" parent="MainMargin/TopLeftCorner/ActionButtons" unique_id=951279536]
 layout_mode = 2

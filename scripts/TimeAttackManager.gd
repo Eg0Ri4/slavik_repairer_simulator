@@ -191,7 +191,7 @@ func generate_random_order() -> OrderData:
 	# Pick a random toy blueprint for the title
 	var toy: Dictionary = TOY_BLUEPRINTS[randi() % TOY_BLUEPRINTS.size()]
 	order.toy_name          = "Broken " + toy["name"]
-	order.pass_tolerance    = 40.0
+	order.pass_tolerance    = 27.0
 	order.tolerance         = 0.5
 
 	order.requirements = []
